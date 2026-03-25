@@ -39,7 +39,7 @@ export class Pool {
     if ( !this.#pool.size ) this.increasePool();
 
     // Pop an object from the pool.
-    const obj = this.#pool.first();
+    const obj = this.#pool.values().next().value;
     this.#pool.delete(obj);
     return obj;
   }
@@ -51,7 +51,7 @@ export class Pool {
   release(obj) {
     // Basic test that the object belongs.
     const cl = this.cl;
-    if ( !(obj instanceof cl) || obj.constructor.name !== cl.name ) {
+    if ( !(obj instanceof cl) ) {
       console.warn("Pool object does not match other instance in the pool.", { cl, obj });
       return;
     }
@@ -120,7 +120,7 @@ export const PoolableMixin = superclass => class extends superclass {
    * @returns {Poolable[n]}
    */
   static buildNObjects(n) {
-    return Array.from({ length: n }, (elem, idx) => new this());
+    return Array.from({ length: n }, (_elem, _idx) => new this());
   }
 }
 
@@ -129,12 +129,9 @@ export const PoolableMixin = superclass => class extends superclass {
  * Allocate space on a first-fit strategy. (Free List alogrithm.)
  * Tracks contiguous blocks of empty space and allocates accordingly.
  */
-class BufferManager {
-  /** @type {ArrayBuffer} */
-  buffer;
-
-  /** @type {object[]} */
-  freeSegments = [];
+export class BufferManager {
+  /** @type {Mat<ArrayBuffer, Array<{byteOffset, byteSize}>} */
+  freeSegmentsMap = new Map();
 
   /** @type {TypedArray} */
   typedClass;
@@ -142,11 +139,31 @@ class BufferManager {
   /** @type {number} */
   get bytesPerElement() { return this.typedClass.BYTES_PER_ELEMENT; }
 
-  constructor(totalSize = 0, { typedClass = Float32Array, maxSize = totalSize } = {}) {
+  /** @type {number} */
+  maxBufferSize = 0;
+
+  /** @type {ArrayBuffer} */
+  currentBuffer;
+
+  constructor(totalSize = 0, { typedClass = Float32Array, maxBufferSize = totalSize } = {}) {
     this.typedClass = typedClass;
-    const byteSize = totalSize * this.bytesPerElement;
-    this.buffer = new ArrayBuffer(byteSize, { maxByteLength: maxSize * this.bytesPerElement });
-    this.freeSegments.push({ byteOffset: 0, byteSize });
+    this.maxBufferSize = maxBufferSize;
+    this._addNewBuffer(totalSize);
+  }
+
+  /**
+   * Add a new buffer of a given size.
+   * @param {number} size
+   * @returns {ArrayBuffer}
+   */
+  _addNewBuffer(size, maxBufferSize) {
+    const byteSize = size * this.bytesPerElement;
+    maxBufferSize ??= this.maxBufferSize;
+    maxBufferSize = Math.max(size, maxBufferSize);
+    const buffer = new ArrayBuffer(byteSize, { maxByteLength: maxBufferSize * this.bytesPerElement });
+    this.freeSegmentsMap.set(buffer, [{ byteOffset: 0, byteSize }]);
+    this.currentBuffer = buffer;
+    return buffer;
   }
 
   /**
@@ -155,47 +172,65 @@ class BufferManager {
    * @returns {TypedArray<size>}
    */
   newArray(size) {
-    const byteOffset = this.allocate(size);
-    return new this.typedClass(this.buffer, byteOffset, size);
+    const { buffer, byteOffset } = this.allocate(size);
+    return new this.typedClass(buffer, byteOffset, size);
   }
 
   /**
    * Reserve a block of space.
    * If out of space, constructs a new buffer.
    * @param {number} size       Number of elements to reserve
-   * @returns {number} The byte offset.
+   * @returns {object}
+   * - @prop {ArrayBuffer} buffer   The buffer to use
+   * - @prop {number} bytOffset     The byte offset.
    */
   allocate(size) {
     const byteSize = size * this.bytesPerElement;
-    for ( let i = 0, iMax = this.freeSegments.length; i < iMax; i += 1 ) {
-      const segment = this.freeSegments[i];
-      if ( segment.byteSize >= byteSize ) {
-        const byteOffset = segment.byteOffset;
-        if ( segment.byteSize === byteSize ) this.freeSegments.splice(i, 1); // Perfect fit: remove the segment entirely.
-        else {
-          // Partial fit: shrink the existing fre segment.
-          segment.byteOffset += byteSize;
-          segment.byteSize -= byteSize;
-        }
-        return byteOffset;
-      }
+
+    // Search all buffers for a free segment.
+    for ( const [buffer, segments] of this.freeSegmentsMap ) {
+      const segment = this._findSegmentWithFreeSpace(segments, byteSize);
+      if ( segment ) return { buffer, byteOffset: segment.byteOffset };
     }
 
     // Insufficient memory left in the buffer.
-    // Expand buffer if possible.
-    const totalBytesNeeded = this.buffer.byteLength + byteSize;
-    if ( this.buffer.maxByteLength > totalBytesNeeded ) {
+    // Try to grow the most recently added buffer.
+    const lastBuffer = this.currentBuffer;
+    const totalBytesNeeded = lastBuffer.byteLength + byteSize;
+    if ( lastBuffer.maxByteLength >= totalBytesNeeded ) {
       // Grow the buffer and use the resized portion for this allocation.
-      const byteOffset = this.buffer.byteLength;
-      this.buffer.resize(totalBytesNeeded);
-      return byteOffset;
-    } else {
-      // Trash the buffer and start anew.
-      this.freeSegments.length = 1;
-      this.freeSegments[0] = { byteOffset: 0, byteSize: this.buffer.byteLength };
-      this.buffer = new ArrayBuffer(Math.max(this.buffer.byteLength, byteSize), { maxByteLength: Math.max(this.buffer.maxByteLength, byteSize) });
-      return this.allocate(size);
+      const byteOffset = lastBuffer.byteLength;
+      lastBuffer.resize(totalBytesNeeded);
+      return { buffer: lastBuffer, byteOffset };
     }
+
+    // Last resort: Add a new buffer.
+    const buffer = this._addNewBuffer(Math.max(size,  2 ** 10));
+    const segments = this.freeSegmentsMap.get(buffer);
+    this._findSegmentWithFreeSpace(segments, byteSize); // Must still process the segment.
+    return { buffer, byteOffset: 0 }; // By definition, because we just added it, offset is 0.
+  }
+
+  /**
+   * Identify a segment with sufficient space.
+   * @param {Array<{byteOffset, byteSize}>} segments      Memory segments to check
+   * @param {number} byteSize                             Target size
+   * @returns {object<byteOffset, byteSize>|null} The first segment with sufficient space
+   */
+  _findSegmentWithFreeSpace(segments, byteSize) {
+    for ( let i = 0, n = segments.length; i < n; i += 1 ) {
+      const segment = segments[i];
+      if ( segment.byteSize >= byteSize ) {
+        if ( segment.byteSize === byteSize ) segments.splice(i, 1); // Perfect fit: remove the segment entirely.
+        else {
+          // Partial fit: shrink the existing free segment.
+          segment.byteOffset += byteSize;
+          segment.byteSize -= byteSize;
+        }
+        return segment;
+      }
+    }
+    return null;
   }
 
   /**
@@ -204,30 +239,32 @@ class BufferManager {
    */
   release(arr) {
     arr.fill(0); // Good practice to limit caching errors.
-    if ( arr.buffer !== this.buffer ) return;
-    const byteSize = arr.byteLength;
-    const byteOffset = arr.byteOffset;
-    const newSegment = { byteSize, byteOffset };
+    if ( !this.freeSegmentsMap.has(arr.buffer) ) return;
+
+    const segments = this.freeSegmentsMap.get(arr.buffer);
+    const newSegment = { byteSize: arr.byteLength, byteOffset: arr.byteOffset };
 
     // Insert and maintain sorted order by offset to allow merging.
-    const idx = this.freeSegments.findIndex(s => s.byteOffset > byteOffset);
-    if ( ~idx ) this.freeSegments.splice(idx, 0, newSegment);
-    else this.freeSegments.push(newSegment);
-    this._mergeNeighbors();
+    const idx = segments.findIndex(s => s.byteOffset > newSegment.byteOffset);
+    if ( ~idx ) segments.splice(idx, 0, newSegment);
+    else segments.push(newSegment);
+
+    // Combine segments that have empty space at their respective borders.
+    this._mergeNeighbors(segments);
   }
 
   /**
    * Combines adjacent free blocks to limit fragmentation.
    */
-  _mergeNeighbors() {
-    for ( let i = 0, iMax = this.freeSegments.length - 1; i < iMax; i += 1 ) {
-      const current = this.freeSegments[i];
-      const next = this.freeSegments[i+1];
+  _mergeNeighbors(segments) {
+    for ( let i = 0, iMax = segments.length - 1; i < iMax; i += 1 ) {
+      const current = segments[i];
+      const next = segments[i+1];
 
       // If current block ends exactly where the next starts, merge.
       if ( current.byteOffset + current.byteSize === next.byteOffset ) {
         current.byteSize += next.byteSize;
-        this.freeSegments.splice(i + 1, 1);
+        segments.splice(i + 1, 1);
         iMax--;
         i--; // Check again with the newly merged block.
       }
