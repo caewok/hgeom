@@ -12,8 +12,10 @@ export class Pool {
   /** @type {number} */
   initialSize = 10;
 
-  /** @type {Set<object>} */
-  #pool = new Set(); // Probably don't want a weak set b/c we want to reuse the object. Smaller memory if WeakSet used.
+  /** @type {object[]} */
+  #pool = [];
+
+  // Faster to use a flag then to use WeakSet to track objects.
 
   /** @type {class} */
   cl;
@@ -28,7 +30,14 @@ export class Pool {
 
   increasePool(n = this.initialSize) {
     const objs = this.cl.buildNObjects(n);
-    for ( let i = 0; i < n; i += 1 ) this.#pool.add(objs[i]);
+    n = objs.length; // In case this changed in buildNObjects.
+    const j = this.#pool.length;
+    this.#pool.length += n;
+    for ( let i = 0; i < n; i += 1 ) {
+      const obj = objs[i];
+      this.#pool[i + j] = obj;
+      obj._isInPool = true;
+    }
   }
 
   /**
@@ -36,11 +45,9 @@ export class Pool {
    */
   acquire() {
     // If empty, add objects to the pool.
-    if ( !this.#pool.size ) this.increasePool();
-
-    // Pop an object from the pool.
-    const obj = this.#pool.values().next().value;
-    this.#pool.delete(obj);
+    if ( !this.#pool.length ) this.increasePool();
+    const obj = this.#pool.pop();
+    obj._isInPool = false;
     return obj;
   }
 
@@ -55,7 +62,11 @@ export class Pool {
       console.warn("Pool object does not match other instance in the pool.", { cl, obj });
       return;
     }
-    this.#pool.add(obj); // Important that the object here is only added once.
+
+    // Important that the object here is only added once.
+    if ( obj._isInPool ) return;
+    this.#pool.push(obj);
+    obj._isInPool = true;
   }
 
   // Use a WeakMap to store pools keyed by the Class itself.
@@ -86,11 +97,13 @@ export const PoolableMixin = superclass => class extends superclass {
    */
   static get pool() { return Pool.getPool(this); }
 
+
+
   /**
    * Get a pooled instance of this class.
    * @type {Poolable}
    */
-  static get tmp() { return this.pool.acquire(); }
+  static get create() { return this.pool.acquire(); }
 
   /**
    * Release an instance back to the pool and trigger cleanup.
@@ -102,6 +115,10 @@ export const PoolableMixin = superclass => class extends superclass {
   }
 
   static release(...objs) { objs.forEach(obj => this._release(obj)); }
+
+  // Flag to track pool status.
+  // Added here so the object class is not later modified.
+  _isInPool = false;
 
   /**
    * Trigger automatic return to the pool if the point is defined with a "using" declaration.
@@ -189,8 +206,8 @@ export class BufferManager {
 
     // Search all buffers for a free segment.
     for ( const [buffer, segments] of this.freeSegmentsMap ) {
-      const segment = this._findSegmentWithFreeSpace(segments, byteSize);
-      if ( segment ) return { buffer, byteOffset: segment.byteOffset };
+      const byteOffset = this._findSegmentWithFreeSpace(segments, byteSize);
+      if ( byteOffset !== null ) return { buffer, byteOffset };
     }
 
     // Insufficient memory left in the buffer.
@@ -221,13 +238,14 @@ export class BufferManager {
     for ( let i = 0, n = segments.length; i < n; i += 1 ) {
       const segment = segments[i];
       if ( segment.byteSize >= byteSize ) {
+        const byteOffset = segment.byteOffset;
         if ( segment.byteSize === byteSize ) segments.splice(i, 1); // Perfect fit: remove the segment entirely.
         else {
           // Partial fit: shrink the existing free segment.
           segment.byteOffset += byteSize;
           segment.byteSize -= byteSize;
         }
-        return segment;
+        return byteOffset;
       }
     }
     return null;
