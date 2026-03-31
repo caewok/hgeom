@@ -42,3 +42,29 @@ export class HPoint2d extends HPointAbstract {
     };
   }
 }
+
+if (window.devtoolsFormatters === undefined) {
+  window.devtoolsFormatters = [];
+}
+
+window.devtoolsFormatters.push({
+  header: function(obj) {
+    if (!(obj instanceof HPoint2d)) return null;
+
+    return ["div", {},
+      ["span", {style: "color: #881391; font-weight: bold;"}, "HPoint2d "],
+      ["span", {style: "color: #1a1aa6;"}, `x: ${obj.x}`],
+      ["span", {}, ", "],
+      ["span", {style: "color: #1a1aa6;"}, `y: ${obj.y}`],
+      ["span", {}, ", "],
+      ["span", {style: "color: #1a1aa6;"}, `w: ${obj.w}`]
+    ];
+  },
+  hasBody: function() { return true; },
+  body: function(obj) {
+    return ["div", {style: "margin-left: 20px;"},
+      ["div", {}, `Raw Array: [${obj.arr.join(", ")}]`],
+      ["div", {}, `Pooled: ${obj._isInPool}`]
+    ];
+  }
+});
