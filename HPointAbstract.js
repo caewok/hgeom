@@ -18,7 +18,7 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
   static get DIMS() { return 2; }
 
   /** @type {Float32Array} */
-  arr = null;
+  arr = []; // Could set to null but this provides better compatibility.
 
   // ----- NOTE: Instance check ----- //
 
@@ -58,7 +58,7 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
   static onRelease(obj) {
     obj.arr.fill(0);
     this.bufferManager.release(obj.arr);
-    obj.arr = null;
+    obj.arr = []; // More compatible alternative to null.
   }
 
   /**
@@ -319,27 +319,14 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
    */
   cMultiply(other, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
-    // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w]
+    // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
     // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
 
     out ||= this.constructor.create;
     const a = this.arr;
     const b = other.arr;
-
-    if ( this.w === other.w ) {
-      for ( let i = 0; i < this.constructor.DIMS; i += 1 ) out.arr[i] = a[i] * b[i];
-      out.w = this.w || 1;
-      return out;
-    }
-
-    // GCD
-    const thisMult = this.w || 1;
-    const otherMult = other.w || 1;
-    const mult = thisMult * otherMult; // a * otherMult * b * thisMult = a * b * otherMult * thisMult
-    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
-      out.arr[i] = a[i] * b[i] * mult;
-    }
-    out.w = mult;
+    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
+    out.w = (this.w || 1) * (other.w || 1);
     return out;
   }
 
@@ -531,7 +518,7 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
    */
   cMagnitude() { return Math.sqrt(this.cMagnitudeSquared()); }
 
-  cMagnitudeSquared = this.cDot
+  cMagnitudeSquared() {
     // x/w * x/w + y/w * y/w = ((x*x) + (y*y)) / w*w
     const a = this.arr;
     let out = 0;

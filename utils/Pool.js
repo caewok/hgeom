@@ -97,8 +97,6 @@ export const PoolableMixin = superclass => class extends superclass {
    */
   static get pool() { return Pool.getPool(this); }
 
-
-
   /**
    * Get a pooled instance of this class.
    * @type {Poolable}

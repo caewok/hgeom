@@ -27,7 +27,8 @@ describe("HPointAbstract & Memory Management", () => {
     const pt = HPoint2d.create;
     pt[Symbol.dispose]();
     expect(pt._isInPool).to.be.true;
-    expect(pt.arr).to.be.null;
+    expect(pt.arr.length).to.equal(0);
+    expect(Array.isArray(pt.arr)).to.be.true;
   });
 
   it("should allow allocation of N objects in a contiguous buffer", () => {

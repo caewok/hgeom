@@ -43,6 +43,7 @@ export class HPoint2d extends HPointAbstract {
   }
 }
 
+/*
 if (window.devtoolsFormatters === undefined) {
   window.devtoolsFormatters = [];
 }
@@ -50,21 +51,29 @@ if (window.devtoolsFormatters === undefined) {
 window.devtoolsFormatters.push({
   header: function(obj) {
     if (!(obj instanceof HPoint2d)) return null;
-
+    if ( !Object.hasOwn(obj, "arr") ) return null; // For incomplete prototypes, like displaying HPoint2d class.
     return ["div", {},
       ["span", {style: "color: #881391; font-weight: bold;"}, "HPoint2d "],
-      ["span", {style: "color: #1a1aa6;"}, `x: ${obj.x}`],
+      ["span", {style: "color: #1a1aa6;"}, `x: ${obj._x}`],
       ["span", {}, ", "],
-      ["span", {style: "color: #1a1aa6;"}, `y: ${obj.y}`],
+      ["span", {style: "color: #1a1aa6;"}, `y: ${obj._y}`],
       ["span", {}, ", "],
       ["span", {style: "color: #1a1aa6;"}, `w: ${obj.w}`]
     ];
   },
   hasBody: function() { return true; },
+
   body: function(obj) {
+    const arrayString = obj.arr ? obj.arr.join(", ") : "null";
+    const pooledStatus = String(obj._isInPool);
     return ["div", {style: "margin-left: 20px;"},
-      ["div", {}, `Raw Array: [${obj.arr.join(", ")}]`],
-      ["div", {}, `Pooled: ${obj._isInPool}`]
+      ["div", {}, `x: ${obj.x}, y: ${obj.y}`],
+      ["div", {}, `Raw Array: [${arrayString}]`],
+      ["div", {}, `Pooled: ${pooledStatus}`],
+      ["div", {}, ["object", { "object": obj }],
+      ], // The entire object.
+
     ];
   }
 });
+*/
