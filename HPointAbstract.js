@@ -134,11 +134,7 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
 
   get w() { return this.arr[this.constructor.DIMS]; }
 
-  get _w() { return this.arr[this.constructor.DIMS]; } // For consistency with _x, _y, etc.
-
   set w(value) { this.arr[this.constructor.DIMS] = value; }
-
-  set _w(value) { this.arr[this.constructor.DIMS] = value; }
 
   // ----- NOTE: Element-wise Addition, subtraction, multiplication ----- //
 
@@ -590,5 +586,36 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
    */
   cross2d(other, idx1 = 0, idx2 = 1) {
     return (this.arr[idx1] * other.arr[idx2]) - (this.arr[idx2] * other.arr[idx1]);
+  }
+
+  // ----- NOTE: Triples ----- //
+  /**
+   * Scalar triple, defined as a • (b x c)
+   * Also: a • (b x c) = (a x b) • c = b • (c x a) = c • (a x b) = (a x b) • c
+   * See https://en.m.wikipedia.org/wiki/Triple_product#Scalar_triple_product
+   * @param {HPoint2d} b              Vector
+   * @param {HPoint2d} c              Vector
+   * @returns {number}
+   */
+  scalarTriple(b, c) {
+    using bc = b.cross(c, bc);
+    return this.dot(bc);
+  }
+
+  /**
+   * Vector triple: a x (b x c) = (a•c)b - (a•b)c
+   * @param {HPoint2d} b              Vector
+   * @param {HPoint2d} c              Vector
+   * @param {HPoint2d} [outPoint]
+   * @returns {HPoint2d} The out point
+   */
+  vectorTriple(b, c, out) {
+    out ||= this.constructor.create;
+    const ac = this.dot(c);
+    const ab = this.dot(b);
+    using scaledB = b.multiplyScalar(ac);
+    using scaledC = c.multiplyScalar(ab);
+    return scaledB.subtract(scaledC, out);
+    b.multiplyScalar(ac, ac)
   }
 }
