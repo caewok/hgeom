@@ -10,6 +10,7 @@ import { MODULE_ID, VERSION } from "./const.js"
 // Tests
 import "./tests/HPoint2d.test.js";
 import "./tests/HPoint3d.test.js";
+import "./tests/Matrix.test.js";
 
 export function registerHGEOM() {
   const module = globalThis[MODULE_ID] ??= {};
