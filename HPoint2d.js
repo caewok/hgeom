@@ -77,6 +77,7 @@ export class HPoint2d extends HPointAbstract {
   }
 }
 
+/* TODO: Are swizzles worth the trouble?
 // Add swizzle getters and setters.
 const COORDS = ["x", "y", "w"];
 
@@ -110,6 +111,7 @@ for ( let i = 0; i < COORDS.length; i += 1 ) {
     }
   }
 }
+*/
 
 
 
