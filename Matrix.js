@@ -1,11 +1,11 @@
 /* globals
-PIXI,
 */
 "use strict";
 
 import { PoolableMixin, BufferManager } from "./utils/Pool.js";
 import { mix } from "./utils/mixwith.js";
 import { HPointAbstract } from "./HPointAbstract.js";
+import { HPoint3d } from "./HPoint3d.js";
 
 // Basic matrix operations
 // May eventually replace with math.js (when installed, call "math" to get functions)
@@ -115,7 +115,7 @@ class MatrixAbstract {
    * Iterate a single row.
    */
   *iterateRow(n) {
-    for ( let c = 0, cMax = this.ncol; c < xMax; c += 1 ) yield this.getIndex(n, c);
+    for ( let c = 0, cMax = this.ncol; c < cMax; c += 1 ) yield this.getIndex(n, c);
   }
 
   /**
@@ -581,22 +581,23 @@ class MatrixAbstract {
    * https://www.scratchapixel.com/lessons/mathematics-physics-for-computer-graphics/lookat-function
    * https://www.geertarien.com/blog/2017/07/30/breakdown-of-the-lookAt-function-in-OpenGL/
    *
-   * @param {Point3d} cameraPosition
-   * @param {Point3d} target
-   * @param {Point3d} up
+   * @param {HPoint3d} cameraPosition
+   * @param {HPoint3d} target
+   * @param {HPoint3d} up
    * @returns {Matrix} 4x4 matrix
    */
   static lookAt(cameraPosition, targetPosition, up, M, Minv) {
     // NOTE: Foundry uses a left-hand coordinate system, with y reversed.
-    using zAxis = Point3d.tmp;
+    const zeroPt = HPoint3d.create;
+    using zAxis = HPoint3d.create;
     cameraPosition.subtract(targetPosition, zAxis); // ZAxis = forward
-    if ( zAxis.almostEqual(Point3d.ZERO) ) return { M: this.identity(4), Minv: this.identity(4) };
+    if ( zAxis.almostEqual(zeroPt) ) return { M: this.identity(4), Minv: this.identity(4) };
     zAxis.normalize(zAxis);
 
-    using xAxis = Point3d.tmp.set(1, 0, 0);
-    using yAxis = Point3d.tmp.set(0, 1, 0);
+    using xAxis = HPoint3d.create.set(1, 0, 0);
+    using yAxis = HPoint3d.create.set(0, 1, 0);
     if ( zAxis.x || zAxis.y ) {
-      using tmpUp = up ? Point3d.tmp.copyFrom(up) : Point3d.tmp.set(0, -1, 1);
+      using tmpUp = up ? HPoint3d.create.copyFrom(up) : HPoint3d.create.set(0, -1, 1);
       tmpUp.cross(zAxis, xAxis); // XAxis = right
       if ( xAxis.magnitudeSquared() ) xAxis.normalize(xAxis); // Don't normalize if 0, 0, 0
       zAxis.cross(xAxis, yAxis); // YAxis = up
