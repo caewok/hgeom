@@ -4,3 +4,5 @@
 eslint.config.mjs
 
 sync_module.js
+
+sync_module.sh
