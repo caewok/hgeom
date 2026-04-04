@@ -12,7 +12,7 @@ import { mix } from "./utils/mixwith.js";
  * All have a DIMS property that controls the number of axes and offset of w component.
  */
 
-export class HPointAbstract extends mix(Object).with(PoolableMixin) {
+export class PointArrayAbstract {
 
   /** @type {number} */
   static get DIMS() { return 2; }
@@ -26,85 +26,20 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
    * Make instanceof work across different modules.
    */
   static [Symbol.hasInstance](instance) {
-    return instance && instance.constructor && instance.constructor._geoLibType === this._geoLibType;
+    return instance && instance.constructor && instance.constructor._geoLibType === this._hgeomLibType;
   }
 
   /** @type {string} */
-  static get _geoLibType() { return this.name; }
+  static get _hgeomLibType() { return this.name; }
 
-  // ----- NOTE: Buffer manager and Pooling ----- //
-
-  /** @type {number} */
-  static BUFFER_NUM_POINTS = 2 ** 6;
-
-  static BUFFER_MAX_NUM_POINTS = 2 ** 8;
-
-  /** @type {number} */
-  static get POINT_LENGTH() { return this.DIMS + 1; }
-
-  /**
-   * Current buffer with usable space to define points.
-   * @type {BufferManager}
-   */
-  static bufferManager = new BufferManager(this.BUFFER_NUM_POINTS * this.POINT_LENGTH + 1, {
-    typedClass: Float32Array,
-    maxBufferSize: this.BUFFER_MAX_NUM_POINTS,
-  });
-
-  /**
-   * Static method triggered when the pool releases an object.
-   * @param {HPointAbstract} obj
-   */
-  static onRelease(obj) {
-    obj.arr.fill(0);
-    this.bufferManager.release(obj.arr);
-    obj.arr = []; // More compatible alternative to null.
-  }
-
-  /**
-   * Get an object from the pool.
-   * @returns {HPointAbstract}
-   */
-  static get create() {
-    const obj = super.create;
-    obj.arr = this.bufferManager.newArray(this.POINT_LENGTH);
-    return obj;
-  }
-
-  /**
-   * Like buildNObjects, but uses a distinct buffer shared only by those n object.
-   * Useful if the intent is to transfer the buffer to a worker or webGPU, for example.
-   * @param {number} n
-   * @returns {HPointAbstract[n]}
-   */
-  static allocateNObjects(n) {
-    const bm = this.bufferManager;
-    const nElems = this.POINT_LENGTH;
-    const ptBytes = bm.bytesPerElement * nElems;
-    const byteSize = ptBytes * n;
-    const buffer = new ArrayBuffer(byteSize);
-    const objs = Array(n);
-    let byteOffset = 0;
-    for ( let i = 0; i < n; i += 1 ) {
-      const obj = new this();
-      obj.arr = new bm.typedClass(buffer, byteOffset, nElems);
-      objs[i] = obj;
-      byteOffset += ptBytes;
-    }
-    return objs;
-  }
-
-  // ----- NOTE: Factory methods ----- //
-
-  /**
-   * Construct a new point.
-   * Alias for HPointAbstract.create.set.
-   */
-  static build(...args) {
-    return this.create.set(...args);
-  }
 
   // ----- NOTE: Set, clone ----- //
+
+  /**
+   * Create a new point. Meant to be overridden using pooling, but kept here for testing.
+   * @returns {PointArrayAbstract}
+   */
+  static get create() { return new this(); }
 
   /**
    * Create a new point that contains the same values as this one.
@@ -618,4 +553,82 @@ export class HPointAbstract extends mix(Object).with(PoolableMixin) {
     return scaledB.subtract(scaledC, out);
     b.multiplyScalar(ac, ac)
   }
+}
+
+export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) {
+
+  // ----- NOTE: Buffer manager ----- //
+
+  /** @type {number} */
+  static BUFFER_MIN_NUM = 2 ** 6;
+
+  static BUFFER_MAX_NUM = 2 ** 8;
+
+  /** @type {number} */
+  static get POINT_LENGTH() { return this.DIMS + 1; }
+
+  /**
+   * Current buffer with usable space to define points.
+   * @type {BufferManager}
+   */
+  static bufferManager = new BufferManager(this.BUFFER_MIN_NUM * this.POINT_LENGTH + 1, {
+    typedClass: Float32Array,
+    maxBufferSize: this.BUFFER_MAX_NUM,
+  });
+
+  // ----- NOTE: Pooling ----- //
+
+  /**
+   * Static method triggered when the pool releases an object.
+   * @param {HPointAbstract} obj
+   */
+  static onRelease(obj) {
+    obj.arr.fill(0);
+    this.bufferManager.release(obj.arr);
+    obj.arr = []; // More compatible alternative to null.
+  }
+
+  /**
+   * Get an object from the pool.
+   * @returns {HPointAbstract}
+   */
+  static get create() {
+    const obj = super.create;
+    obj.arr = this.bufferManager.newArray(this.POINT_LENGTH);
+    return obj;
+  }
+
+  /**
+   * Like buildNObjects, but uses a distinct buffer shared only by those n object.
+   * Useful if the intent is to transfer the buffer to a worker or webGPU, for example.
+   * @param {number} n
+   * @returns {HPointAbstract[n]}
+   */
+  static allocateNObjects(n) {
+    const bm = this.bufferManager;
+    const nElems = this.POINT_LENGTH;
+    const ptBytes = bm.bytesPerElement * nElems;
+    const byteSize = ptBytes * n;
+    const buffer = new ArrayBuffer(byteSize);
+    const objs = Array(n);
+    let byteOffset = 0;
+    for ( let i = 0; i < n; i += 1 ) {
+      const obj = new this();
+      obj.arr = new bm.typedClass(buffer, byteOffset, nElems);
+      objs[i] = obj;
+      byteOffset += ptBytes;
+    }
+    return objs;
+  }
+
+  // ----- NOTE: Factory methods ----- //
+
+  /**
+   * Construct a new point.
+   * Alias for HPointAbstract.create.set.
+   */
+  static build(...args) {
+    return this.create.set(...args);
+  }
+
 }
