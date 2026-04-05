@@ -7,6 +7,8 @@ import * as lib from "./_module.mjs";
 import { MODULE_ID, VERSION } from "./const.js"
 // import { CONFIG } from "./config.js";
 
+import "./helpers.js";
+
 // Tests
 import "./tests/HPoint2d.test.js";
 import "./tests/HPoint3d.test.js";
