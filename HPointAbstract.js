@@ -45,6 +45,7 @@ export class PointArrayAbstract {
     const out = new this();
     out.arr.length = nDims + 1;
     out.arr.fill(0);
+    out.w = 1;
     return out;
   }
 
@@ -68,6 +69,7 @@ export class PointArrayAbstract {
     this.arr.set(args);
     return this;
   }
+
 
   // ----- NOTE: Property getters ----- //
 
@@ -200,15 +202,15 @@ export class PointArrayAbstract {
     return this.multiply(p1, out, out);
   }
 
-  // ---- NOTE: Static "Cartesian" non-homogenous math: Addition, subtraction, multiplication, division ----- //
+  // ---- NOTE: Static "Euclidean" non-homogenous math: Addition, subtraction, multiplication, division ----- //
 
   /**
-   * "Cartesian" math treats vectors (w = 0) as w = 1 and
+   * "Euclidean" math treats vectors (w = 0) as w = 1 and
    * otherwise is equivalent to non-homogenous math for a point.
    * The "w" value is only used to carry over division.
 
   /**
-   * "Cartesian" add.
+   * "Euclidean" add.
    * Add two homogenous points or vectors but treat as a normal point/vector.
    * If w > 1, this will adjust the points to greatest common denominator.
    * @param {PointArrayAbstract} p1      The vector to add
@@ -216,7 +218,7 @@ export class PointArrayAbstract {
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  static cAdd(p1, p2, out) {
+  static eAdd(p1, p2, out) {
     /*
     w, w' > 0: [x, y, w] + [x', y', w'] = [x/w + x'/w', y/w + y'/w', 1]
       = [((x * w') + (x' * w)) / (w * w'), ((y * w') + (y' * w)) / (w * w'), 1]
@@ -245,7 +247,7 @@ export class PointArrayAbstract {
   }
 
   /**
-   * "Cartesian" subtract.
+   * "Euclidean" subtract.
    * If w > 1, this will adjust the points to greatest common denominator.
    * Unlike homogenous subtraction, the resulting point will have w = 1 if the ws are equal.
    * @param {PointArrayAbstract} p1      The vector to subtract from
@@ -253,7 +255,7 @@ export class PointArrayAbstract {
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  static cSubtract(p1, p2, out) {
+  static eSubtract(p1, p2, out) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
@@ -274,14 +276,14 @@ export class PointArrayAbstract {
   }
 
   /**
-   * "Cartesian" multiply as if non-homogenous points.
+   * "Euclidean" multiply as if non-homogenous points.
    * If w > 1, this will adjust the points to greatest common denominator.
    * @param {PointArrayAbstract} p1      The vector to multiply
    * @param {PointArrayAbstract} p2      The other vector to multiply with
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  static cMultiply(p1, p2, out) {
+  static eMultiply(p1, p2, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
     // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
     // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
@@ -295,13 +297,13 @@ export class PointArrayAbstract {
   }
 
   /**
-   * "Cartesian" invert. 1 / pt.
+   * "Euclidean" invert. 1 / pt.
    * Treats vectors (w === 0) as point (w === 1).
    * @param {PointArrayAbstract} p      The point to invert
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  static cInvert(p, out) {
+  static eInvert(p, out) {
     // 1/[x,y,w] = [1/(x/w), 1/(y/w), 1] = [w/x, w/y, 1] = [w, w, x*y]
     const nDims = p.DIMS;
     out ||= this.create(nDims);
@@ -318,13 +320,13 @@ export class PointArrayAbstract {
 
 
   /**
-   * "Cartesian" divide as if non-homogenous points.
+   * "Euclidean" divide as if non-homogenous points.
    * If w > 1, this will adjust the points to greatest common denominator.
    * @param {HPointAbstract} other      The other vector to multiply
    * @param {HPointAbstract} [out]      The object in which to store the result.
    * @returns {HPointAbstract}
    */
-  static cDivide(p1, p2, out) {
+  static eDivide(p1, p2, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
     // w === w', w > 0: [x, y, w] / [x', y', w] = [x/w / x'/w, y/w / y'/w, 1] = [x/x', y/y', 1]
     //  = [(x*y')/(x'*y'), (y*x')/(x'*y'), 1] = [x*y', y*x', x' * y']
@@ -347,14 +349,14 @@ export class PointArrayAbstract {
   }
 
   /**
-   * "Cartesian" multiply by a scalar.
+   * "Euclidean" multiply by a scalar.
    * Treats vectors (w === 0) as point (w === 1).
    * @param {PointArrayAbstract} p          The point to scale
    * @param {PointArrayAbstract} c          The scalar to multiply
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  static cMultiplyScalar(p, c, out) {
+  static eMultiplyScalar(p, c, out) {
     // [3,6,3] * 5 = [1, 2, 1] * 5 = [5, 10, 1]
     // Same as [15, 30, 15] -> [15, 30, 3] = [5, 10, 1]
     // w > 0: [x, y, w] * c = [x/w * c, y/w * c, 1] = [x*c, y*c, w]
@@ -370,13 +372,13 @@ export class PointArrayAbstract {
   }
 
   /**
-   * "Cartesian" divide the scalar as if non-homogenous points.
+   * "Euclidean" divide the scalar as if non-homogenous points.
    * @param {PointArrayAbstract} p          The point to scale
    * @param {PointArrayAbstract} c          The scalar to multiply
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  static cDivideScalar(p, c, out) {
+  static eDivideScalar(p, c, out) {
     // x/w / 5 = x/w * 1/5 = x / 5w.
     // y/w / 5 = y/w * 1/5 = y / 5w.
     const nDims = p.DIMS;
@@ -405,12 +407,12 @@ export class PointArrayAbstract {
   }
 
   /**
-   * "Cartesian" dot product.
+   * "Euclidean" dot product.
    * @param {PointArrayAbstract} p1    A point
    * @param {PointArrayAbstract} p2    Another point
    * @returns {number}
    */
-  static cDot(p1, p2) {
+  static eDot(p1, p2) {
     // (w value ignored for dot)
     // w === w', w === 0: [x,y,0] • [x',y',0] = x * x' + y * y'
     // w or w' === 0: [x,y,0] • [x',y',w] = x * x'/w' + y * y'/w' = (x*x' + y*y')/w'
@@ -425,7 +427,99 @@ export class PointArrayAbstract {
     return out;
   }
 
-  // ----- NOTE: Magnitude and normalize ----- //
+  // ----- NOTE: Instance methods for basic math ----- //
+
+  /**
+   * Add a point/vector to another point/vector.
+   * Point + Point = Point (average between them)
+   * Point + Vector = Point
+   * Vector + Vector = Vector
+   * Vector + Point = Point
+   * @param {PointArrayAbstract} other  Point to add to this one
+   * @param {PointArrayAbstract} out    Where to store the result
+   * @returns {PointArrayAbstract}
+   */
+  add(other, out) { return this.constructor.add(this, other, out); }
+
+  /**
+   * Subtract a point/vector from another point/vector.
+   * For points, will get GCD.
+   * Point - Point = Vector
+   * Point - Vector = Point
+   * Vector - Vector = Vector
+   * Vector - Point = Point (-w in most cases)
+   * @param {PointArrayAbstract} other  Point to subtract from this one
+   * @param {PointArrayAbstract} out    Where to store the result
+   * @returns {PointArrayAbstract}
+   */
+  subtract(other, out) {
+    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, other, out);
+
+    // GCD
+    // Like cSubtract, but skipping a few steps.
+    const nDims = this.DIMS;
+    out ||= this.constructor.create(nDims);
+    const a = p1.arr;
+    const b = p2.arr;
+    const m1 = p1.w;
+    const m2 = p2.w;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
+    out.w = m1 * m2;
+    return  out;
+  }
+
+  /**
+   * Multiply this point by a scalar, elementwise.
+   * Note that has no real effect on points because dividing by w cancels it out.
+   * It does scale vectors.
+   * @param {PointArrayAbstract} c          The scalar to multiply
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  scale(c, out) { return this.constructor.multiplyScalar(this, c, out); }
+
+  // ----- NOTE: Vectorize ----- //
+
+  /**
+   * Get the vector between two points, by subtracting the second from the first.
+   * Alias for a.subtract(b, out).
+   */
+  static vectorBetween(a, b, out) { return a.subtract(b, out); }
+
+  /**
+   * Get the vector between two points, by subtracting the second from the first.
+   * This vector will be normalized.
+   * This is faster than a.subtract(b).normalize().
+   * For point - vector, this will return the vector scaled by the point's w.
+   * For vector - point, this will return the vector scaled by the point's -w.
+   * For vector - vector, this will fail.
+   * The points should have the same w sign.
+   * @param {PointArrayAbstract} a       First point
+   * @param {PointArrayAbstract} b       Second point, subtracted from the first
+   * @param {PointArrayAbstract} out
+   * @returns {PointArrayAbstract} A vector
+   */
+  static unitVectorBetween(a, b, out) {
+    if ( a.isVector && b.isVector ) throw Error(`${this.name}|unitVectorBetween requires points.`);
+    // See https://web.engr.oregonstate.edu/~mjb/cs557/Handouts/homogcoords.1pp.pdf
+    // GCD
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const m1 = p1.w || 1;
+    const m2 = p2.w || 1;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
+
+    // Ignore the denominator.
+    out.w = 0;
+    return out.normalize(out);
+  }
+
+
+  // ----- NOTE: Dot, magnitude, and normalize ----- //
+
+  dot(other) { return this.constructor.dot(this, other); }
+
+  dotSelf() { return this.magnitudeSquared(); }
 
   /**
    * Magnitude (length, or sometimes distance) of this vector.
@@ -444,12 +538,12 @@ export class PointArrayAbstract {
   }
 
   /**
-   * Cartesian magnitude.
+   * Euclidean magnitude.
    * @returns {number}
    */
-  cMagnitude() { return Math.sqrt(this.cMagnitudeSquared()); }
+  eMagnitude() { return Math.sqrt(this.eMagnitudeSquared()); }
 
-  cMagnitudeSquared() {
+  eMagnitudeSquared() {
     // x/w * x/w + y/w * y/w = ((x*x) + (y*y)) / w*w
     const a = this.arr;
     let out = 0;
@@ -471,7 +565,7 @@ export class PointArrayAbstract {
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  cNormalize(out) { return this.constructor.cDivideScalar(this, this.cMagnitude(), out); }
+  eNormalize(out) { return this.constructor.eDivideScalar(this, this.cMagnitude(), out); }
 
   // ----- NOTE: Static Cross ----- //
 
@@ -484,17 +578,17 @@ export class PointArrayAbstract {
    * @param {PointArrayAbstract} [out]
    * @returns {PointArrayAbstract}
    */
-  static cross(vectors = [], outPoint) {
+  static cross(vectors = [], out) {
     if ( !vectors.length ) throw Error(`${this.name}|cross|Vector array required.`);
     const p0 = vectors[0];
     const nDims = p0.DIMS;
-    outPoint ??= this.create(nDims);
+    out ??= this.create(nDims);
 
     // Treat as cross 2d
     if ( nDims === 1 && vectors.length === 2 ) {
-      outPoint.arr[0] = this.cross2d(p0, vectors[1]);
-      outPoint.arr[1] = 1;
-      return outPoint;
+      out.arr[0] = this.cross2d(p0, vectors[1]);
+      out.arr[1] = 1;
+      return out;
     }
 
     // Otherwise, need 1 less vector than the number of coordinates per vector.
@@ -504,13 +598,13 @@ export class PointArrayAbstract {
     if ( nDims === 2 ) {
       const p1 = vectors[1];
 
-      // Avoid overwriting if outPoint is this or other.
+      // Avoid overwriting if out point is this or other.
       const x = this.cross2d(p0, p1, 1, 2);
       const y = this.cross2d(p0, p1, 2, 0);
       const w = this.cross2d(p0, p1, 0, 1);
-      outPoint.arr[0] = x;
-      outPoint.arr[1] = y;
-      outPoint.arr[2] = w;
+      out.arr[0] = x;
+      out.arr[1] = y;
+      out.arr[2] = w;
       return outPoint;
     }
 
@@ -613,6 +707,7 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
   static create() {
     const obj = super.create();
     obj.arr = this.bufferManager.newArray(this.POINT_LENGTH);
+    obj.w = 1;
     return obj;
   }
 
@@ -633,6 +728,7 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
     for ( let i = 0; i < n; i += 1 ) {
       const obj = new this();
       obj.arr = new bm.typedClass(buffer, byteOffset, nElems);
+      obj.w = 1;
       objs[i] = obj;
       byteOffset += ptBytes;
     }
