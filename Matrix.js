@@ -92,6 +92,38 @@ class MatrixAbstract {
    return out;
   }
 
+  /**
+   * Return a new matrix that omits a specific row from this matrix.
+   * @param {number} row            Row number to omit
+   * @param {Matrix} out            Out matrix
+   * @returns {Matrix} New matrix
+   */
+  dropRow(row = 0, out) {
+    const nrow = this.nrow;
+    out ||= this.constructor.create(nrow -1, this.ncol);
+    for ( let i = 0; i < nrow; i += 1 ){
+      if ( i === row ) continue;
+      out.setRow([...this.iterateRow(i)]);
+    }
+    return out;
+  }
+
+  /**
+   * Return a new matrix that omits a specific row from this matrix.
+   * @param {number} col            Column number to omit
+   * @param {Matrix} out            Out matrix
+   * @returns {Matrix} New matrix
+   */
+  dropColumn(col = 0, out) {
+    const ncol = this.ncol;
+    out ||= this.constructor.create(this.nrow, ncol -1);
+    for ( let i = 0; i < ncol; i += 1 ){
+      if ( i === col ) continue;
+      out.setColumn([...this.iterateColumn(i)]);
+    }
+    return out;
+  }
+
   // ----- NOTE: Iterators ----- //
 
   /**
@@ -1524,7 +1556,7 @@ export class Matrix extends mix(MatrixAbstract).with(PoolableMixin) {
    * @returns {Matrix}
    */
   static create(nrow = 0, ncol = 0) {
-    const obj = super.create;
+    const obj = super.create();
     obj.nrow = nrow;
     obj.ncol = ncol;
     obj.arr = this.bufferManager.newArray(obj.size);
