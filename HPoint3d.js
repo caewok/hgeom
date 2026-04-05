@@ -67,10 +67,10 @@ export class HPoint3d extends HPointAbstract {
     // bc: b - c: b.x*c.w - c.x*b.w, b.y*c.w - c.y*b.w, b.w*c.w
     // cross2d: ac.y * bc.x - ac.x * bc.y; w = ac.w * bc.w
     // (a.y⋅c.w−c.y⋅a.w)(b.x⋅c.w−c.x⋅b.w)−(a.x⋅c.w−c.x⋅a.w)(b.y⋅c.w−c.y⋅b.w)
-    using ac12 = a.cross2d(c, 1, 2);
-    using bc02 = b.cross2d(c, 0, 2);
-    using ac02 = a.cross2d(c, 0, 2);
-    using bc12 = b.cross2d(c, 1, 2);
+    using ac12 = this.cross2d(a, c, 1, 2);
+    using bc02 = this.cross2d(b, c, 0, 2);
+    using ac02 = this.cross2d(a, c, 0, 2);
+    using bc12 = this.cross2d(b, c, 1, 2);
     const cw = c.w;
     return ((ac12 * bc02) - (ac02 * bc12)) / (a.w * b.w * cw * cw);
   }

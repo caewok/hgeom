@@ -558,10 +558,14 @@ export class PointArrayAbstract {
   }
 }
 
-
+/**
+ * Two choices: Either subclass with the Pool mixin, or create a new mixin to be
+ * applied per-point. (e.g. PointPoolMixin = superclass => class extends PoolableMixin(superclass))
+ * Subclass shares the buffer manager while the mixin would apply a buffer manager per child point class.
+ * Subclass used here; assumed to be less resource intensive.
+ */
 export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) {
-
-  // ----- NOTE: Buffer manager ----- //
+   // ----- NOTE: Buffer manager ----- //
 
   /** @type {number} */
   static get DIMS() { return 3; }
@@ -634,8 +638,7 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
    * Construct a new point.
    * Alias for HPointAbstract.create.set.
    */
-  static build(...args) {
+  static construct(...args) {
     return this.create.set(...args);
   }
-
 }
