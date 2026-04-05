@@ -6,6 +6,7 @@
 
 import { PoolableMixin, BufferManager } from "./utils/Pool.js";
 import { mix } from "./utils/mixwith.js";
+import { Matrix } from "./Matrix.js";
 
 /**
  * Abstract class that represents homogenous points of various dimensions.
@@ -15,7 +16,7 @@ import { mix } from "./utils/mixwith.js";
 export class PointArrayAbstract {
 
   /** @type {number} */
-  static get DIMS() { return 2; }
+  get DIMS() { return this.arr.length - 1; }
 
   /** @type {Float32Array} */
   arr = []; // Could set to null but this provides better compatibility.
@@ -37,9 +38,15 @@ export class PointArrayAbstract {
 
   /**
    * Create a new point. Meant to be overridden using pooling, but kept here for testing.
+   * @param {number} nDims            Number of dimensions
    * @returns {PointArrayAbstract}
    */
-  static get create() { return new this(); }
+  static get create(nDims) {
+    const out = new this();
+    out.arr.length = nDims + 1;
+    out.arr.fill(0);
+    return out;
+  }
 
   /**
    * Create a new point that contains the same values as this one.
@@ -67,54 +74,57 @@ export class PointArrayAbstract {
   // Child classes may defined additional property getters, like x, y, z.
   // Convention is for, e.g., get x to return arr[0]/w. While get _x will return arr[0].
 
-  get w() { return this.arr[this.constructor.DIMS]; }
+  get w() { return this.arr[this.DIMS]; }
 
-  set w(value) { this.arr[this.constructor.DIMS] = value; }
+  set w(value) { this.arr[this.DIMS] = value; }
 
-  // ----- NOTE: Element-wise Addition, subtraction, multiplication ----- //
+  // ----- NOTE: Static Element-wise Addition, subtraction, multiplication ----- //
 
   /**
    * Add a vector to this one, elementwise.
-   * @param {HPointAbstract} other      The other vector to add
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1      The vector to add
+   * @param {PointArrayAbstract} p2      The other vector to add
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  add(other, out) {
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
-    for ( let i = 0, n = this.constructor.DIMS + 1; i < n; i += 1 ) out.arr[i] = a[i] + b[i];
+  static add(p1, p2, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    const b = p2.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] + b[i];
     return out;
   }
 
-
   /**
    * Subtract a point vector to this one, elementwise.
-   * @param {HPointAbstract} other      The other vector to subtract
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1      The vector to subtract from
+   * @param {PointArrayAbstract} p2      The other vector to subtract
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  subtract(other, out) {
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
-    for ( let i = 0, n = this.constructor.DIMS + 1; i < n; i += 1 ) out.arr[i] = a[i] - b[i];
+  static subtract(p1, p2, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    const b = p2.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] - b[i];
     return out;
   }
 
   /**
    * Multiply a point vector to this one, elementwise.
-   * @param {HPointAbstract} other      The other vector to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1      The vector to multiply
+   * @param {PointArrayAbstract} p2      The other vector to multiply with
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  multiply(other, out) {
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
-    for ( let i = 0, n = this.constructor.DIMS + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i] * b[i];
-    }
+  static multiply(p1, p2, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    const b = p2.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
     return out;
   }
 
@@ -122,30 +132,44 @@ export class PointArrayAbstract {
    * Multiply this point by a scalar, elementwise.
    * Note that has no real effect on points because dividing by w cancels it out.
    * It does scale vectors.
-   * @param {HPointAbstract} c          The scalar to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p          The point to scale
+   * @param {PointArrayAbstract} c          The scalar to multiply
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  multiplyScalar(c, out) {
-    out ||= this.constructor.create;
-    for ( let i = 0, n = this.constructor.DIMS + 1; i < n; i += 1 ) out.arr[i] = this.arr[i] * c;
+  static multiplyScalar(p, c, out) {
+    const nDims = p.DIMS;
+    out ||= this.create(nDims);
+    const a = p.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] * c;
     return out;
   }
 
   /**
-   * Invert a pt: 1/pt.
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * Divide this point by a scalar, elementwise.
+   * @param {PointArrayAbstract} p          The point to scale
+   * @param {PointArrayAbstract} c          The scalar to multiply
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  invert(out) {
+  static divideScalar(p, c, out) { return this.multiplyScalar(p, 1/c, out); }
+
+  /**
+   * Invert a pt: 1/pt.
+   * @param {PointArrayAbstract} p      The point to invert
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  static invert(p, out) {
     // 1/[x, y,w] = [1/(x/w), 1/(y/w), 1] = [w/x, w/y, 1] = [w, w, x*y]
     // Or:
     // 1/[x,y,w] = [1/x, 1/y, 1/w] = [1/x / 1/w, 1/y / 1/w, 1]
     //   = [w/x, w/y,1] = [w, w, x*y]
-    out ||= this.constructor.create;
-    const a = this.arr;
+    const nDims = p.DIMS;
+    out ||= this.create(nDims);
+    const a = p.arr;
     let denom = 1;
-    for ( let i = 0; i < this.constructor.DIMS; i += 1 ) {
+    for ( let i = 0; i < nDims; i += 1 ) {
       out.arr[i] = a.w;
       denom *= a[i];
     }
@@ -155,20 +179,21 @@ export class PointArrayAbstract {
 
   /**
    * Divide a point by another.
-   * @param {HPointAbstract} other      The other vector to divide
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p      The vector to divide
+   * @param {PointArrayAbstract} other      The other vector to divide by
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  divide(other, out) {
+  static divide(p1, p2, out) {
     // [x,y,w]/[x',y',w'] = [x/x', y/y', w/w'] = [x/x' / w/w', y/y' / w/w', 1]
     //   = [x*w' / x'*w, y*w' / y'*w, 1] = [(x*w')*(y'*w) / (x'*w) * (y'*w), (y*w')*(x'*w)/(x'*w) * (y'*w), 1]
     //   = [(x*w')*(y'*w), (y*w')*(x'*w), (x'*w) * (y'*w)]
     // Or [x,y,w] * (1/[x',y',w']) = [x,y,w] * [w', w', x'*y'] = [x*w', y*w', w*x'*y']
-    other.invert(out);
-    return this.multiply(out, out);
+    this.invert(p2, out);
+    return this.multiply(p1, out, out);
   }
 
-  // ---- NOTE: "Cartesian" non-homogenous math: Addition, subtraction, multiplication, division ----- //
+  // ---- NOTE: Static "Cartesian" non-homogenous math: Addition, subtraction, multiplication, division ----- //
 
   /**
    * "Cartesian" math treats vectors (w = 0) as w = 1 and
@@ -179,36 +204,36 @@ export class PointArrayAbstract {
    * "Cartesian" add.
    * Add two homogenous points or vectors but treat as a normal point/vector.
    * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {HPointAbstract} other      The other vector to add
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1      The vector to add
+   * @param {PointArrayAbstract} p2      The other vector to add
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cAdd(other, out) {
+  static cAdd(p1, p2, out) {
     /*
     w, w' > 0: [x, y, w] + [x', y', w'] = [x/w + x'/w', y/w + y'/w', 1]
       = [((x * w') + (x' * w)) / (w * w'), ((y * w') + (y' * w)) / (w * w'), 1]
       = [(x * w') + (x' * w), (y * w') + (y' * w), w * w']
     */
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    const b = p2.arr;
 
     /* If the ws are equal, no need to get GCD
     w === w', w > 0: [x, y, w] + [x', y', w] = [x/w + x'/w, y/w + y'/w, 1] = [x + x', y + y', w]
     */
-    if ( this.w === other.w ) {
-      for ( let i = 0; i < this.constructor.DIMS; i += 1 ) out.arr[i] = a[i] + b[i];
-      out.w = this.w || 1;
+    if ( p1.w === p2.w ) {
+      for ( let i = 0; i < nDims; i += 1 ) out.arr[i] = a[i] + b[i];
+      out.w = p1.w || 1;
       return out;
     }
 
     // GCD
-    const thisMult = this.w || 1;
-    const otherMult = other.w || 1;
-    for ( let i = 0; i < this.constructor.DIMS; i += 1 ) {
-      out.arr[i] = (a[i] * otherMult) + (b[i] * thisMult);
-    }
-    out.w = thisMult * otherMult;
+    const m1 = p1.w || 1;
+    const m2 = p2.w || 1;
+    for ( let i = 0; i < nDims; i += 1 ) out.arr[i] = (a[i] * m2) + (b[i] * m1);
+    out.w = m1 * m2;
     return out;
   }
 
@@ -216,64 +241,67 @@ export class PointArrayAbstract {
    * "Cartesian" subtract.
    * If w > 1, this will adjust the points to greatest common denominator.
    * Unlike homogenous subtraction, the resulting point will have w = 1 if the ws are equal.
-   * @param {HPointAbstract} other      The other vector to subtract
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1      The vector to subtract from
+   * @param {PointArrayAbstract} p2      The other vector to subtract
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cSubtract(other, out) {
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
+  static cSubtract(p1, p2, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    const b = p2.arr;
 
-    if ( this.w === other.w ) {
-      for ( let i = 0; i < this.constructor.DIMS; i += 1 ) out.arr[i] = a[i] - b[i];
+    if ( p1.w === p2.w ) {
+      for ( let i = 0; i < nDims; i += 1 ) out.arr[i] = a[i] - b[i];
       out.w = 1;
       return out;
     }
 
     // GCD
-    const thisMult = this.w || 1;
-    const otherMult = other.w || 1;
-    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
-      out.arr[i] = (a[i] * otherMult) - (b[i] * thisMult);
-    }
-    out.w = thisMult * otherMult;
+    const m1 = p1.w || 1;
+    const m2 = p2.w || 1;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
+    out.w = m1 * m2;
     return out;
   }
 
   /**
    * "Cartesian" multiply as if non-homogenous points.
    * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {HPointAbstract} other      The other vector to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1      The vector to multiply
+   * @param {PointArrayAbstract} p2      The other vector to multiply with
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cMultiply(other, out) {
+  static cMultiply(p1, p2, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
     // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
     // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
-
+    const nDims = p1.DIMS;
     out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
-    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
-    out.w = (this.w || 1) * (other.w || 1);
+    const a = p1.arr;
+    const b = p2.arr;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
+    out.w = (p1.w || 1) * (p2.w || 1);
     return out;
   }
 
   /**
    * "Cartesian" invert. 1 / pt.
    * Treats vectors (w === 0) as point (w === 1).
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p      The point to invert
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cInvert(out) {
+  static cInvert(p, out) {
     // 1/[x,y,w] = [1/(x/w), 1/(y/w), 1] = [w/x, w/y, 1] = [w, w, x*y]
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const w = this.w || 1;
+    const nDims = p.DIMS;
+    out ||= this.create(nDims);
+    const a = p.arr;
+    const w = p.w || 1;
     let denom = 1;
-    for ( let i = 0; i < this.constructor.DIMS; i += 1 ) {
+    for ( let i = 0; i < nDims; i += 1 ) {
       out.arr[i] = w;
       denom *= a[i];
     }
@@ -289,7 +317,7 @@ export class PointArrayAbstract {
    * @param {HPointAbstract} [out]      The object in which to store the result.
    * @returns {HPointAbstract}
    */
-  cDivide(other, out) {
+  static cDivide(p1, p2, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
     // w === w', w > 0: [x, y, w] / [x', y', w] = [x/w / x'/w, y/w / y'/w, 1] = [x/x', y/y', 1]
     //  = [(x*y')/(x'*y'), (y*x')/(x'*y'), 1] = [x*y', y*x', x' * y']
@@ -306,126 +334,91 @@ export class PointArrayAbstract {
     //   = [(x*w')*(w*y')*(w*z')/(w*x')*(w*y')*(w*z'), (y*w')*(w*x')*(w*z')/(w*y')*(w*x')*(w*z'), (z*w')*(w*x')*(w*y')/(w*y')*(w*x')*(w*z'), 1]
     //   = [(x*w')*(w*y')*(w*z'), (y*w')*(w*x')*(w*z'), (z*w')*(w*x')*(w*y'), (w*x')*(w*y')*(w*z')]
 
-    /*
-    out ||= this.constructor.create;
-    const a = this.arr;
-    const b = other.arr;
-    if ( this.w === other.w ) {
-      let denom = 1;
-      for ( let i = 0; i < this.constructor.DIMS; i += 1 ) {
-        denom *= b[i]; // x' * y' * z' ...
-        out.arr[i] = a[i];
-        for ( let j = 0; j < this.constructor.DIMS; j += 1 ) {
-          if ( i === j ) continue;
-          out.arr[i] *= b[j]; // x * y' * z' ..., // y * x' * z'...
-        }
-      }
-      out.w = denom;
-      return out;
-    }
-
-    let denom = 1;
-    const aW = this.w || 1;
-    const bW = other.w || 1;
-    for ( let i = 0; i < this.constructor.DIMS; i += 1 ) {
-      denom = Math.pow(aW, this.constructor.DIMS); // (w * x') * ( w * y') * (w * z')...
-      out.arr[i] = a[i] * bW;
-      out.arr[i] *= Math.pow(aW, this.constructor.DIMS - 1);
-      for ( let j = 0; j < this.constructor.DIMS; j += 1 ) {
-        if ( i === j ) continue;
-        out.arr[i] *= b[j]; // (x*w')*(w*y')*(w*z')...
-      }
-    }
-    out.w = denom;
-    return out;
-    */
-
     // Instead, calculate [x,y,w] * (1/[x',y',w'])
-    other.cInvert(out);
-    return this.cMultiply(out, out);
+    this.cInvert(p2, out);
+    return this.cMultiply(p1, out, out);
   }
-
-
 
   /**
    * "Cartesian" multiply by a scalar.
    * Treats vectors (w === 0) as point (w === 1).
-   * @param {HPointAbstract} c          The scalar to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p          The point to scale
+   * @param {PointArrayAbstract} c          The scalar to multiply
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cMultiplyScalar(c, out) {
+  static cMultiplyScalar(p, c, out) {
     // [3,6,3] * 5 = [1, 2, 1] * 5 = [5, 10, 1]
     // Same as [15, 30, 15] -> [15, 30, 3] = [5, 10, 1]
     // w > 0: [x, y, w] * c = [x/w * c, y/w * c, 1] = [x*c, y*c, w]
 
     // x/w * 5 = 5x / w. The w is not multiplied.
     // y/w * 5 = 5y / w.
-    out ||= this.constructor.create;
-    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) out.arr[i] = this.arr[i] * c;
-    out.w = this.w || 1;
+    const nDims = p.DIMS;
+    out ||= this.create(nDims);
+    const a = p.arr;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = a[i] * c;
+    out.w = p.w || 1;
     return out;
   }
 
   /**
-   * Divide this point by a scalar, elementwise.
-   * @param {HPointAbstract} c          The scalar to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
-   */
-  divideScalar(c, out) { return this.multiplyScalar(1/c, out); }
-
-  /**
    * "Cartesian" divide the scalar as if non-homogenous points.
-   * @param {HPointAbstract} c          The scalar to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p          The point to scale
+   * @param {PointArrayAbstract} c          The scalar to multiply
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cDivideScalar(c, out) {
+  static cDivideScalar(p, c, out) {
     // x/w / 5 = x/w * 1/5 = x / 5w.
     // y/w / 5 = y/w * 1/5 = y / 5w.
-    out ||= this.constructor.create;
-    this.clone(out);
+    const nDims = p.DIMS;
+    out ||= this.create(nDims);
+    p.clone(out);
     out.w ||= 1;
     out.w *= c;
     return out;
   }
 
-  // ----- NOTE: Dot, magnitude, normalize ----- //
+  // ----- NOTE: Static dot ----- //
 
   /**
    * Dot product of two vectors: a.x * b.x + a.y * b.y + ...
    * Only well-defined for vectors.
-   * @param {HPointAbstract} other    The other point
+   * @param {PointArrayAbstract} p1    A point
+   * @param {PointArrayAbstract} p2    Another point
    * @returns {number}
    */
-  dot(other) {
-    const a = this.arr;
-    const b = other.arr;
+  static dot(p1, p2) {
+    const a = p1.arr;
+    const b = p2.arr;
     let out = 0;
-    for ( let i = 0, n = this.constructor.DIMS + 1; i < n; i += 1 ) out += (a[i] * b[i]);
+    for ( let i = 0, n = p1.DIMS + 1; i < n; i += 1 ) out += (a[i] * b[i]);
     return out;
   }
 
   /**
    * "Cartesian" dot product.
-   * @param {HPointAbstract} other    The other point
+   * @param {PointArrayAbstract} p1    A point
+   * @param {PointArrayAbstract} p2    Another point
    * @returns {number}
    */
-  cDot(other) {
+  static cDot(p1, p2) {
     // (w value ignored for dot)
     // w === w', w === 0: [x,y,0] • [x',y',0] = x * x' + y * y'
     // w or w' === 0: [x,y,0] • [x',y',w] = x * x'/w' + y * y'/w' = (x*x' + y*y')/w'
     // w === w', w > 0: [x,y,w] • [x',y',w] = x/w * x'/w + y/w * y'/w = (x*x' + y*y') / w
     // w, w' > 0: [x,y,w] • [x',y',w] = x/w * x'/w' + y/w * y'/w'
     //   = (x*x')/(w*w') + (y*y')/(w*w') = (x*x' + y*y') / (w * w')
-    const a = this.arr;
-    const b = other.arr;
+    const a = p1.arr;
+    const b = p2.arr;
     let out = 0;
-    for ( let i = 0; i < this.constructor.DIMS; i += 1 ) out += (a[i] * b[i]);
-    out /= ((this.w || 1) * (other.w ||  1));
+    for ( let i = 0, nDims = p1.DIMS; i < nDims; i += 1 ) out += (a[i] * b[i]);
+    out /= ((p1.w || 1) * (p2.w ||  1));
     return out;
   }
+
+  // ----- NOTE: Magnitude and normalize ----- //
 
   /**
    * Magnitude (length, or sometimes distance) of this vector.
@@ -439,7 +432,7 @@ export class PointArrayAbstract {
     // For speed, don't just call dot.
     const a = this.arr;
     let out = 0;
-    for ( let i = 0, n = this.constructor.DIMS + 1; i < n; i += 1 ) out += (a[i] ** 2);
+    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) out += (a[i] ** 2);
     return out;
   }
 
@@ -453,7 +446,7 @@ export class PointArrayAbstract {
     // x/w * x/w + y/w * y/w = ((x*x) + (y*y)) / w*w
     const a = this.arr;
     let out = 0;
-    for ( let i = 0; i < this.constructor.DIMS; i += 1 ) out += (a[i] ** 2);
+    for ( let i = 0; i < this.DIMS; i += 1 ) out += (a[i] ** 2);
     out /= ((this.w || 1) ** 2);
     return out;
   }
@@ -461,81 +454,92 @@ export class PointArrayAbstract {
   /**
    * Normalize by dividing this vector by the magnitude.
    * Only well-defined for vectors.
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  normalize(out) {
-    return this.divideScalar(this.magnitude(), out);
-  }
+  normalize(out) { return this.constructor.divideScalar(this, this.magnitude(), out); }
 
   /**
    * Use the cartesian magnitude to normalize.
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
    */
-  cNormalize(out) {
-    return this.cDivideScalar(this.cMagnitude(), out);
-  }
+  cNormalize(out) { return this.constructor.cDivideScalar(this, this.cMagnitude(), out); }
 
-  // ----- NOTE: Cross ----- //
+  // ----- NOTE: Static Cross ----- //
 
   /**
    * X dimensional cross, or "perpendicular":
    * https://math.stackexchange.com/questions/2371022/cross-product-in-higher-dimensions
    * Uses determinants.
-   *
-   * @param {HPointAbstract} other
-   * @param {HPointAbstract} [out]
-   * @returns {HPointAbstract}
+   * @param {PointArrayAbstract} p1
+   * @param {PointArrayAbstract} p2
+   * @param {PointArrayAbstract} [out]
+   * @returns {PointArrayAbstract}
    */
-  cross(other, outPoint) {
-    outPoint ??= this.constructor.create;
+  static cross(vectors = [], outPoint) {
+    if ( !vectors.length ) throw Error(`${this.name}|cross|Vector array required.`);
+    const p0 = vectors[0];
+    const nDims = p0.DIMS;
+    outPoint ??= this.create(nDims);
 
-    // Cross 2d
-    if ( this.constructor.DIMS === 1 ) {
-      outPoint.arr[0] = this.cross2d(other);
+    // Treat as cross 2d
+    if ( nDims === 1 && vectors.length === 2 ) {
+      outPoint.arr[0] = this.cross2d(p0, vectors[1]);
       outPoint.arr[1] = 1;
       return outPoint;
     }
 
+    // Otherwise, need 1 less vector than the number of coordinates per vector.
+    if ( vectors.length !== nDims ) throw Error(`${this.name}|cross|Need ${nDims} vectors for ${nDims + 1} dimensions.`);
+
     // Cross 3d
-    if ( this.constructor.DIMS === 2 ) {
+    if ( nDims === 2 ) {
+      const p1 = vectors[1];
+
       // Avoid overwriting if outPoint is this or other.
-      const x = this.cross2d(other, 1, 2);
-      const y = this.cross2d(other, 2, 0);
-      const w = this.cross2d(other, 0, 1);
-      outPoint.arr.set([x, y, w]);
+      const x = this.cross2d(p0, p1, 1, 2);
+      const y = this.cross2d(p0, p1, 2, 0);
+      const w = this.cross2d(p0, p1, 0, 1);
+      outPoint.arr[0] = x;
+      outPoint.arr[1] = y;
+      outPoint.arr[2] = w;
       return outPoint;
     }
 
-    console.error("cross|Higher dimensions not yet implemented.");
+    // Use determinants for higher dimensions.
+    // E.g, for 4 dimensions, need 4 determinants from 3 vectors:
+    // {t1,..., t4}, {u1, ..., u4}, {v1, ..., v4}
+    // a1 = |2, 3, 4|, a2 = |1, 3, 4|, a3 = |1, 2, 4|, a4 = |1, 2, 3|
+    const fullDims = nDims + 1;
+    using mat = Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
+    for ( let i = 0; i < nDims; i += 1 ) mat.setColumn(i, vectors[i].arr);}
+
+    // Get the 3x3 determinant of each combination of the 3x4 matrix.
+    using matDet = Matrix.create(nDims, nDims); // E.g., 3x3
+    for ( let colToOmit = 0; colToOmit < fullDims; colToOmit += 1 ) {
+      mat.dropColumn(colToOmit, matDet);
+      out.arr[colToOmit] = matDet.determinant();
+    }
+    return out;
   }
 
   /**
-   * Cross two axes of this point with another.
+   * Cross two axes of two points
    * E.g., p1.x * p2.y - p2.x * p1.y or equally, p1.x * p2.y - p1.y * p2.x.
-   * @param {HPointAbstract} other
+   * @param {HPointAbstract} p1
+   * @param {HPointAbstract} p2
    * @param {number} idx1               First axis
    * @param {number} idx2               Second axis
    * @returns {number}
    */
-  cross2d(other, idx1 = 0, idx2 = 1) {
-    return (this.arr[idx1] * other.arr[idx2]) - (this.arr[idx2] * other.arr[idx1]);
+  static cross2d(p1, p2, idx1 = 0, idx2 = 1) {
+    const a = p1.arr;
+    const b = p2.arr;
+    return (a[idx1] * b[idx2]) - (a[idx2] * b[idx1]);
   }
 
   // ----- NOTE: Triples ----- //
-  /**
-   * Scalar triple, defined as a • (b x c)
-   * Also: a • (b x c) = (a x b) • c = b • (c x a) = c • (a x b) = (a x b) • c
-   * See https://en.m.wikipedia.org/wiki/Triple_product#Scalar_triple_product
-   * @param {HPoint2d} b              Vector
-   * @param {HPoint2d} c              Vector
-   * @returns {number}
-   */
-  scalarTriple(b, c) {
-    using bc = b.cross(c, bc);
-    return this.dot(bc);
-  }
 
   /**
    * Vector triple: a x (b x c) = (a•c)b - (a•b)c
@@ -544,20 +548,23 @@ export class PointArrayAbstract {
    * @param {HPoint2d} [outPoint]
    * @returns {HPoint2d} The out point
    */
-  vectorTriple(b, c, out) {
-    out ||= this.constructor.create;
-    const ac = this.dot(c);
-    const ab = this.dot(b);
-    using scaledB = b.multiplyScalar(ac);
-    using scaledC = c.multiplyScalar(ab);
-    return scaledB.subtract(scaledC, out);
-    b.multiplyScalar(ac, ac)
+  static vectorTriple(a, b, c, out) {
+    out ||= this.create(a.DIMS);
+    const ac = this.dot(a, c);
+    const ab = this.dot(a, b);
+    using scaledB = this.multiplyScalar(b, ac)
+    using scaledC = this.multiplyScalar(c, ab);
+    return this.subtract(scaledB, scaledC, out);
   }
 }
+
 
 export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) {
 
   // ----- NOTE: Buffer manager ----- //
+
+  /** @type {number} */
+  static get DIMS() { return 3; }
 
   /** @type {number} */
   static BUFFER_MIN_NUM = 2 ** 6;
@@ -592,8 +599,8 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
    * Get an object from the pool.
    * @returns {HPointAbstract}
    */
-  static get create() {
-    const obj = super.create;
+  static create() {
+    const obj = super.create();
     obj.arr = this.bufferManager.newArray(this.POINT_LENGTH);
     return obj;
   }
