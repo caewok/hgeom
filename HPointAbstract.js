@@ -78,6 +78,13 @@ export class PointArrayAbstract {
 
   set w(value) { this.arr[this.DIMS] = value; }
 
+  // For parallel with _x, _y, ...
+  get _w() { return this.arr[this.DIMS]; }
+
+  set _w(value) { return this.arr[this.DIMS] = value; }
+
+  get isVector() { return this.w === 0; }
+
   // ----- NOTE: Static Element-wise Addition, subtraction, multiplication ----- //
 
   /**
