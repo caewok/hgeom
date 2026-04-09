@@ -605,13 +605,19 @@ export class PointArrayAbstract {
       out.arr[0] = x;
       out.arr[1] = y;
       out.arr[2] = w;
-      return outPoint;
+      return out;
     }
+    return this._cross(vectors, out);
+  }
 
+  static _cross(vectors = [], out) {
     // Use determinants for higher dimensions.
     // E.g, for 4 dimensions, need 4 determinants from 3 vectors:
     // {t1,..., t4}, {u1, ..., u4}, {v1, ..., v4}
     // a1 = |2, 3, 4|, a2 = |1, 3, 4|, a3 = |1, 2, 4|, a4 = |1, 2, 3|
+
+    const p0 = vectors[0];
+    const nDims = p0.DIMS;
     const fullDims = nDims + 1;
     using mat = Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
     for ( let i = 0; i < nDims; i += 1 ) mat.setColumn(i, vectors[i].arr);}
@@ -621,6 +627,7 @@ export class PointArrayAbstract {
     for ( let colToOmit = 0; colToOmit < fullDims; colToOmit += 1 ) {
       mat.dropColumn(colToOmit, matDet);
       out.arr[colToOmit] = matDet.determinant();
+      if ( isOddFast(colToOmit) ) out.arr[colToOmit] *= -1;
     }
     return out;
   }
@@ -745,3 +752,5 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
     return this.create.set(...args);
   }
 }
+
+function isOddFast(n) { return (n & 1) === 1; }

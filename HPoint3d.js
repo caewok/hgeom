@@ -52,6 +52,18 @@ export class HPoint3d extends HPointAbstract {
     };
   }
 
+  /**
+   * Generalized cross product of this point with two other 3d homogeous points.
+   * @param {HPoint3d} b
+   * @param {HPoint3d} c
+   * @param {HPoint3d} [out]
+   * @returns {HPoint3d}
+   */
+  cross(b, c, out) {
+    out ||= this.constructor.newInstance;
+    return this._constructor.cross([this, b, c], out);
+  }
+
 
   /**
    * Determine the relative orientation of four points in three-dimensional space.
