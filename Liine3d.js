@@ -29,19 +29,30 @@ export class Line3d {
    */
   moment;
 
-  constructor() {
-    const pts = Point3d.allocate(2);
-    direction = pts[0];
-    moment = pts[1];
-    direction.w = 0;
-    moment.w = 0;
-  }
-
   [Symbol.dispose]() { this.release(); }
 
   release() {
     this.direction.release();
     this.moment.release();
+  }
+
+  // ----- NOTE: Factory methods ----- //
+
+  /** @type {Line3d} */
+  static get newInstance() { return this.create(); }
+
+  /**
+   * Create a new Line3d, with direction and moment both set to {0,0,0,0}
+   * @returns {Line3d}
+   */
+  static create() {
+    const out = new this();
+    const pts = Point3d.allocate(2);
+    direction = pts[0];
+    moment = pts[1];
+    direction.w = 0;
+    moment.w = 0;
+    return out;
   }
 
   /**
@@ -51,7 +62,7 @@ export class Line3d {
    * @returns {Line3d}
    */
   static fromPoints(a, b) {
-    const out = new this();
+    const out = this.create();
     using d = b.subtract(a);
     using m = a.cross(b);
     this.direction.copyFrom(d);
@@ -78,13 +89,15 @@ export class Line3d {
    */
   static fromRay(rayOrigin, rayDirection) {
     // See fromPoints.
-    const out = new this();
+    const out = this.create();
     using b = rayOrigin.add(rayDirection);
     using m = rayOrigin.cross(b);
     this.direction.copyFrom(rayDirection);
     this.moment.copyFrom(m);
     return out;
   }
+
+  // ----- NOTE: Methods ----- //
 
   /**
    * Test if a given 3d point is on this line.
@@ -118,6 +131,8 @@ export class Line3d {
     xd.subtract(this.moment, xd);
     return xd.magnitudeSquared();
   }
+
+  // ----- NOTE: Static methods ----- //
 
   /**
    * Check if two 3d lines intersect.
@@ -163,7 +178,7 @@ export class Line3d {
     return plane;
   }
 
-  /*
+  /* TODO: Implement this in Triangle3d.
    In a 3D engine, we often need to know if a ray (like a bullet in a game or a ray of light)
    hits an edge of a triangle. Using Plücker coordinates, we can do this with just a few multiplications
    and additions: Represent the ray as a Plücker coordinate $L_{ray}$.Represent the triangle edge as a
