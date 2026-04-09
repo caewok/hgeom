@@ -518,8 +518,31 @@ export class PointArrayAbstract {
 
   // ----- NOTE: Dot, magnitude, and normalize ----- //
 
+  /**
+   * Perspective divide this point to convert it to standard 3D Cartesian point p.
+   * @param {HPointAbstrat} out
+   * @returns {HPointAbstract} out  This point with w set to 1.
+   */
+  perspectiveDivide(out) {
+    if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
+    out ||= this.constructor.newInstance;
+    this.clone(out);
+    out.multiplyScalar(1/out.w);
+    return out;
+  }
+
+  /**
+   * Dot product of this point with another.
+   * @param {HPointAbstract} other
+   * @returns {number}
+   */
   dot(other) { return this.constructor.dot(this, other); }
 
+  /**
+   * Dot product of this point with itself.
+   * Faster than pt.dot(pt).
+   * @returns {number}
+   */
   dotSelf() { return this.magnitudeSquared(); }
 
   /**
