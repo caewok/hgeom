@@ -55,6 +55,7 @@ export class PointArrayAbstract {
    * @returns {HPointAbstract} The out object
    */
   clone(out) {
+    if ( out === this ) return out;
     out ||= this.constructor.create;
     out.arr.set(this.arr);
     return out;
