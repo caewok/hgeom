@@ -6,6 +6,9 @@
 
 import { HPoint2d } from "./HPoint2d.js";
 
+/**
+ * Dual of two 2d lines is a 2d point.
+ */
 export class Point2d extends HPoint2d {
 
   /**

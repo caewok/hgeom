@@ -26,6 +26,13 @@ export class Polygon2d {
     this.points.length = n;
   }
 
+  [Symbol.dispose]() { this.release(); }
+
+  release() {
+    this.points.forEach(pt => pt.release());
+    this.points.length = 0;
+  }
+
   // ----- NOTE: Getters ----- //
 
   /** @type {number} */
