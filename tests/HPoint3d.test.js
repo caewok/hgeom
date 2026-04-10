@@ -3,8 +3,8 @@ HGEOM,
 */
 "use strict";
 
-Hooks.on("quenchReady", quench => {
-  quench.registerBatch(
+export function runTests(context) {
+  const { describe, it, expect } = context;
   const HPoint3d = HGEOM.HPoint3d;
 
   describe("HPointAbstract & Memory Management", () => {

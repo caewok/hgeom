@@ -3,16 +3,12 @@
 "use strict";
 
 import * as lib from "./_module.mjs";
-
 import { MODULE_ID, VERSION } from "./const.js"
+import { registerTests } from "./tests/index.js";
 // import { CONFIG } from "./config.js";
 
-import "./helpers.js";
-
-// Tests
-import "./tests/HPoint2d.test.js";
-import "./tests/HPoint3d.test.js";
-import "./tests/Matrix.test.js";
+// Self-executing.
+import "./util.js";
 
 export function registerHGEOM() {
   const module = globalThis[MODULE_ID] ??= {};
@@ -24,6 +20,8 @@ export function registerHGEOM() {
   // Set up library.
   // module.CONFIG = CONFIG; // TODO: Implement CONFIG.
   module.CONST = { VERSION };
+  module.CONFIG ??= {};
+  module.CONFIG.controllingModule = MODULE_ID;
   Object.assign(module, lib);
 }
 
@@ -49,3 +47,12 @@ function isNewerVersion(testV, targetV) {
   }
   return false;
 }
+
+/**
+ * On the init hook, register tests.
+ * Only register for the controlling module, not every module.
+ */
+Hooks.on("init", () => {
+  if ( HGEOM.CONFIG.controllingModule !== MODULE_ID ) return;
+  Hooks.on("quenchReady", registerTests);
+});
