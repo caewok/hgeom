@@ -179,7 +179,7 @@ export class PointArray {
     const a = p.arr;
     let denom = 1;
     for ( let i = 0; i < nDims; i += 1 ) {
-      out.arr[i] = a.w;
+      out.arr[i] = a[nDims];
       denom *= a[i];
     }
     out.w = denom;
