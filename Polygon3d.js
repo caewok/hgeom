@@ -1,23 +1,26 @@
 /* globals
-PIXI,
+
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Point2d, Line2d } from "./Point2d.js";
-import { AABB2d } from "./AABB2d.js";
+import { Point3d } from "./Point3d.js";
+import { AABB3d } from "./AABB3d.js";
 
 /**
- * 2d polygon shapes.
- * Represented using an array of points.
+ * 3d polygon shapes.
+ * Represented using an array of points plus a plane.
  * A single point is a circle or ellipse.
  * Two points form a segment.
  * Three form a triangle.
  * Four form a quad.
+ *
+ * The plane is derived from the points.
+ * For performance, it is assumed that the first three points are not collinear and form a polane.
  */
 
-export class Polygon2d {
-  /** @type {Point2d} */
+export class Polygon3d {
+  /** @type {Point3d} */
   points = [];
 
   // TODO: Is it worth storing lines for polygon edges? Maybe cached? Or vectors?
@@ -38,7 +41,6 @@ export class Polygon2d {
   /** @type {number} */
   get length() { return this.points.length; }
 
-
   // ----- NOTE: AABB ----- //
 
   #aabb;
@@ -51,22 +53,24 @@ export class Polygon2d {
 
   get aabb() {
     if ( this.#dirtyAABB ) {
-      this.#aabb ??= AABB2d.newInstance;
-      AABB2d.fromPolygon(this, this.#aabb);
+      this.#aabb ??= AABB3d.newInstance;
+      AABB3d.fromPolygon(this, this.#aabb);
       this.#dirtyAABB = false;
     }
     return this.#aabb;
   }
 
+  // ----- NOTE: Plane ----- //
+
   // ----- NOTE: Centroid calculation ----- //
 
   /**
    * Geometric centroid is the average of its vertices.
-   * @param {Point2d} out
-   * @returns {Point2d
+   * @param {Point3d} out
+   * @returns {Point3d}
    */
   normalizedGeometricCentroid(out) {
-    out ||= Point2d.newInstance;
+    out ||= Point3d.newInstance;
     out.arr.fill(0); // Just in case.
     const n = this.length;
     for ( let i = 0; i < n; i += 1 ) {
@@ -86,7 +90,7 @@ export class Polygon2d {
    * e.g., coming from different perspective transformations.
    */
   geometricCentroid(out) {
-    out ||= Point2d.newInstance;
+    out ||= Point3d.newInstance;
     out.arr.fill(0);
     const n = this.length;
     for ( let i = 0; i < n; i += 1 ) out.add(this.points[i], out);
@@ -96,15 +100,16 @@ export class Polygon2d {
   /**
    * Calculate the area-based centroid (center of mass) using Shoelace formula.
    * Requires normalizing the points.
-   * @returns {Point2d}
+   * @returns {Point3d}
    */
   areaCentroid(out) {
-    out ||= Point2d.newInstance;
+    out ||= Point3d.newInstance;
     out.arr.fill(0);
 
+    const n = this.length;
     let a = this.points.at(-1);
     for ( const b of this.iteratePoints() ) {
-      const cross = Point2d.constructor.cCross2d(a, b);
+      const cross = Point3d.constructor.cCross2d(a, b);
       out.x += (a.x + b.x) * cross;
       out.y += (a.y + b.y) * cross;
       out.w += cross;
@@ -128,31 +133,37 @@ export class Polygon2d {
    */
   static create(n = 3) {
     const poly = new this(n);
-    poly.points = Point2d.allocate(n);
+    const pts = Point3d.allocate(n + 1);
+    poly.plane = pts.shift(); // Preferable to have the plane be first in the array.
+    poly.points = pts;
     return poly;
   }
 
   /**
    * Construct a new polygon, copying the coordinates of an array of points.
-   * @param {Point2d[]} pts
+   * @param {Point3d[]} pts
+   * @param {}
    * @returns {Polygon2d}
    */
-  static fromPoints(pts) {
+  static fromPoints(pts, plane) {
     const n = pts.length;
     const poly = this.create(n);
     for ( let i = 0; i < n; i += 1 ) poly.points[i].copyFrom(pts[i]);
+    poly.plane.copyFrom(plane);
     return poly;
   }
 
   /**
    * Construct a new polygon, using an existing array of points directly.
    * The array is copied directly, so modifying the array will change the polygon.
-   * @param {Point2d[]} pts
+   * @param {Point3d[]} pts
    * @returns {Polygon2d}
    */
-  static withPoints(pts) {
+  static withPoints(pts, plane) {
+    const n = pts.length;
     const poly = new this(0);
     poly.points = pts;
+    poly.plane = plane;
     return poly;
   }
 
@@ -164,12 +175,12 @@ export class Polygon2d {
    * @param {PIXI.Polygon|PIXI.Circle|PIXI.Ellipse|PIXI.Rectangle} pixiShape
    * @returns {Polygon2d}
    */
-  static fromPIXI(pixiShape) {
+  static fromPIXI(pixiShape, plane) {
     switch ( pixiShape.type ) {
       case PIXI.SHAPES.CIRCLE:
       case PIXI.SHAPES.ELLIPSE:
       case PIXI.SHAPES.RECTANGLE: pixiShape  = pixiShape.toPolygon();
-      case PIXI.SHAPES.POLY: {  /* eslint-disable-line no-fallthrough */
+      case PIXI.SHAPES.POLY: {
         const ptsArr = pixiShape.points;
         const n = ptsArr.length;
         const out = new this(n);
@@ -195,8 +206,8 @@ export class Polygon2d {
   /**
    * Iterate the edges of this polygon.
    * @yield {object}            Two points of the polygon; not copied.
-   *   - @prop {Point2d} a
-   *   - @prop {Point2d} b
+   *   - @prop {Point3d} a
+   *   - @prop {Point3d} b
    * For efficiency, the edge between the last point and the first point will be iterated first.
    */
   *iterateEdges() {
@@ -209,20 +220,20 @@ export class Polygon2d {
 
   /**
    * Iterate the points of this polygon.
-   * @yield {Point2d}       Point of the polygon, not copied.
+   * @yield {Point3d}       Point of the polygon, not copied.
    */
   *iteratePoints() { yield *this.points; } // Use the array iterator.
 
   /**
    * Iterate the edges of this polygon in reverse order.
    * @yield {object}            Two points of the polygon; not copied.
-   *   - @prop {Point2d} a
-   *   - @prop {Point2d} b
+   *   - @prop {Point3d} a
+   *   - @prop {Point3d} b
    * For efficiency, the edge between the first point and the last point will be iterated first.
    */
   *reverseIterateEdges() {
     let a = this.points.at(0);
-    for ( let i = this.points.length - 1; i > -1; i -= 1 ) {
+    for ( let i = this.points.length - 1; i > -1; i += 1 ) {
       const b = this.points[i];
       yield { a, b };
     }
@@ -230,10 +241,10 @@ export class Polygon2d {
 
   /**
    * Iterate the points of this polygon, in reverse order.
-   * @yield {Point2d}       Point of the polygon, not copied.
+   * @yield {Point3d}       Point of the polygon, not copied.
    */
   *reverseIteratePoints() {
-    for ( let i = this.points.length - 1; i > -1; i -= 1 ) yield this.points[i];
+    for ( let i = this.points.length - 1; i > -1; i += 1 ) yield this.points[i];
   }
 
 }
@@ -253,7 +264,7 @@ export class Ellipse2d extends Polygon2d {
 
   get b() { return this.semiMinor; }
 
-  /** @type {Point2d} */
+  /** @type {Point3d} */
   get center() { return this.points[0]; }
 
   constructor() { super(1); }
@@ -284,7 +295,9 @@ export class Circle2d extends Ellipse2d {
    * @returns {Circle2d}
    */
   fromPIXI(pixiCircle) {
-    // TODO: Implement.
+    const out = new this();
+    out.points[0].
+
   }
 }
 
@@ -295,8 +308,8 @@ export class Segment2d extends Polygon2d {
 
   get b() { return this.points[1]; }
 
-  /** @type {Point2d} */
-  get center() { return Point2d.midPoint(this.points[0], this.points[1]); }
+  /** @type {Point3d} */
+  get center() { return Point3d.midPoint(this.points[0], this.points[1]); }
 
   /** @type {Line2d} */
   get line() { return Line2d.fromPoints(this.points[0], this.points[1]); }
@@ -325,7 +338,7 @@ export class Segment2d extends Polygon2d {
    * Intersect two finite line segments.
    * @param {Segment2d} s1
    * @param {Segment2d} s2
-   * @returns {Point2d}
+   * @returns {Point3d}
    */
   static segmentIntersection(s1, s2) {
     using l1 = s1.line;
@@ -344,7 +357,7 @@ export class Segment2d extends Polygon2d {
   /**
    * Determine if a point P is between A and B.
    * Works by checking if (P-A) • (B-A) is between 0 and |B-A|^2
-   * @param {Point2d} pt
+   * @param {Point3d} pt
    * @returns {boolean}
    */
   isPointOnSegment(pt) {
