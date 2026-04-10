@@ -296,7 +296,7 @@ export class PointArray {
     // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
     // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
     const nDims = p1.DIMS;
-    out ||= this.constructor.create;
+    out ||= this.create(nDims);
     const a = p1.arr;
     const b = p2.arr;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = a[i] * b[i];

@@ -23,19 +23,22 @@ export class HPoint2d extends HPointAbstract {
   // Vectors return x without any division, to avoid NaN.
 
   /** @type {number} */
-  get x() { return this.arr[0] / (this.w || 1); }
+  get x() { return this.arr[0] / (this.w || 1);  }
 
   get _x() { return this.arr[0]; }
 
-  set _x(value) { return this.arr[0] = value; }
-
   set x(value) { this.arr[0] = value * (this.w || 1); }
 
-  get y() { return this.arr[1]; }
+  set _x(value) { return this.arr[0] = value; }
 
-  get _y() { return this.arr[1] / this.w; }
+  /** @type {number} */
+  get y() { return this.arr[1] / (this.w || 1); }
+
+  get _y() { return this.arr[1]; }
 
   set y(value) { this.arr[1] = value * (this.w || 1); }
+
+  set _y(value) { return this.arr[1] = value; }
 
   // ----- NOTE: PIXI conversion ----- //
 
@@ -110,10 +113,10 @@ export class HPoint2d extends HPointAbstract {
     // bc: b - c: b.x*c.w - c.x*b.w, b.y*c.w - c.y*b.w, b.w*c.w
     // cross2d: ac.y * bc.x - ac.x * bc.y; w = ac.w * bc.w
     // (a.y⋅c.w−c.y⋅a.w)(b.x⋅c.w−c.x⋅b.w)−(a.x⋅c.w−c.x⋅a.w)(b.y⋅c.w−c.y⋅b.w)
-    using ac12 = this.cross2d(a, c, 1, 2);
-    using bc02 = this.cross2d(b, c, 0, 2);
-    using ac02 = this.cross2d(a, c, 0, 2);
-    using bc12 = this.cross2d(b, c, 1, 2);
+    const ac12 = this.cross2d(a, c, 1, 2);
+    const bc02 = this.cross2d(b, c, 0, 2);
+    const ac02 = this.cross2d(a, c, 0, 2);
+    const bc12 = this.cross2d(b, c, 1, 2);
     const cw = c.w;
     return ((ac12 * bc02) - (ac02 * bc12)) / (a.w * b.w * cw * cw);
   }
