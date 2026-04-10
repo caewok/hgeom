@@ -1,19 +1,18 @@
 /* globals
-
+HGEOM,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { PoolableMixin, BufferManager } from "./utils/Pool.js";
 import { mix } from "./utils/mixwith.js";
-import { Matrix } from "./Matrix.js";
 
 /**
  * Abstract class that represents homogenous points of various dimensions.
  * All have a DIMS property that controls the number of axes and offset of w component.
  */
 
-export class PointArrayAbstract {
+export class PointArray {
 
   /** @type {number} */
   get DIMS() { return this.arr.length - 1; }
@@ -27,7 +26,7 @@ export class PointArrayAbstract {
    * Make instanceof work across different modules.
    */
   static [Symbol.hasInstance](instance) {
-    return instance && instance.constructor && instance.constructor._geoLibType === this._hgeomLibType;
+    return instance && instance.constructor && instance.constructor._hgeomLibType === this._hgeomLibType;
   }
 
   /** @type {string} */
@@ -41,7 +40,7 @@ export class PointArrayAbstract {
    * @param {number} nDims            Number of dimensions
    * @returns {PointArrayAbstract}
    */
-  static get create(nDims) {
+  static create(nDims) {
     const out = new this();
     out.arr.length = nDims + 1;
     out.arr.fill(0);
@@ -56,7 +55,7 @@ export class PointArrayAbstract {
    */
   clone(out) {
     if ( out === this ) return out;
-    out ||= this.constructor.create;
+    out ||= this.constructor.create(this.NDIMS);
     out.arr.set(this.arr);
     return out;
   }
@@ -84,7 +83,7 @@ export class PointArrayAbstract {
   // For parallel with _x, _y, ...
   get _w() { return this.arr[this.DIMS]; }
 
-  set _w(value) { return this.arr[this.DIMS] = value; }
+  set _w(value) { this.arr[this.DIMS] = value; }
 
   get isVector() { return this.w === 0; }
 
@@ -460,10 +459,10 @@ export class PointArrayAbstract {
     // Like cSubtract, but skipping a few steps.
     const nDims = this.DIMS;
     out ||= this.constructor.create(nDims);
-    const a = p1.arr;
-    const b = p2.arr;
-    const m1 = p1.w;
-    const m2 = p2.w;
+    const a = this.arr;
+    const b = other.arr;
+    const m1 = this.w;
+    const m2 = other.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
     out.w = m1 * m2;
     return  out;
@@ -643,11 +642,11 @@ export class PointArrayAbstract {
     const p0 = vectors[0];
     const nDims = p0.DIMS;
     const fullDims = nDims + 1;
-    using mat = Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
-    for ( let i = 0; i < nDims; i += 1 ) mat.setColumn(i, vectors[i].arr);}
+    using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
+    for ( let i = 0; i < nDims; i += 1 ) mat.setColumn(i, vectors[i].arr);
 
     // Get the 3x3 determinant of each combination of the 3x4 matrix.
-    using matDet = Matrix.create(nDims, nDims); // E.g., 3x3
+    using matDet = HGEOM.Matrix.create(nDims, nDims); // E.g., 3x3
     for ( let colToOmit = 0; colToOmit < fullDims; colToOmit += 1 ) {
       mat.dropColumn(colToOmit, matDet);
       out.arr[colToOmit] = matDet.determinant();
@@ -696,28 +695,35 @@ export class PointArrayAbstract {
  * Subclass shares the buffer manager while the mixin would apply a buffer manager per child point class.
  * Subclass used here; assumed to be less resource intensive.
  */
-export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) {
+export class HPointAbstract extends mix(PointArray).with(PoolableMixin) {
    // ----- NOTE: Buffer manager ----- //
-
-  /** @type {number} */
-  static get DIMS() { return 3; }
 
   /** @type {number} */
   static BUFFER_MIN_NUM = 2 ** 6;
 
-  static BUFFER_MAX_NUM = 2 ** 8;
-
-  /** @type {number} */
-  static get POINT_LENGTH() { return this.DIMS + 1; }
+  static BUFFER_MAX_NUM = 2 ** 10;
 
   /**
    * Current buffer with usable space to define points.
+   * Defined for each child class.
+   * (`static bufferManager = new bufferManager` would only define a single shared BM.)
    * @type {BufferManager}
    */
-  static bufferManager = new BufferManager(this.BUFFER_MIN_NUM * this.POINT_LENGTH + 1, {
-    typedClass: Float32Array,
-    maxBufferSize: this.BUFFER_MAX_NUM,
-  });
+  static _bufferManager;
+
+  static get bufferManager() {
+    if ( !Object.hasOwn(this, "_bufferManager") ) {
+      // Determine the dimensions of this class's object.
+      const obj = new this()
+
+      // Create a unique manager for each subclass that accesses it.
+      this._bufferManager = new BufferManager(this.BUFFER_MIN_NUM * obj.DIMS, {
+        typedClass: Float32Array,
+        maxBufferSize: this.BUFFER_MAX_NUM * obj.DIMS,
+      });
+    }
+    return this._bufferManager;
+  }
 
   // ----- NOTE: Pooling ----- //
 
@@ -736,8 +742,9 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
    * @returns {HPointAbstract}
    */
   static create() {
-    const obj = super.create();
-    obj.arr = this.bufferManager.newArray(this.POINT_LENGTH);
+    // Use 'this.pool' to ensure we get the pool for the specific subclass
+    const obj = this.pool.acquire();
+    obj.arr = this.bufferManager.newArray(obj.DIMS + 1);
     obj.w = 1;
     return obj;
   }
@@ -750,12 +757,18 @@ export class HPointAbstract extends mix(PointArrayAbstract).with(PoolableMixin) 
    */
   static allocateNObjects(n) {
     const bm = this.bufferManager;
-    const nElems = this.POINT_LENGTH;
+
+    // Determine the object size.
+    let byteOffset = 0;
+    let obj = new this();
+    const nElems = obj.DIMS + 1;
     const ptBytes = bm.bytesPerElement * nElems;
     const byteSize = ptBytes * n;
     const buffer = new ArrayBuffer(byteSize);
+    obj.release();
+
+    // Allocate the objects.
     const objs = Array(n);
-    let byteOffset = 0;
     for ( let i = 0; i < n; i += 1 ) {
       const obj = new this();
       obj.arr = new bm.typedClass(buffer, byteOffset, nElems);
