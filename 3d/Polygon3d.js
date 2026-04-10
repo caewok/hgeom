@@ -1,10 +1,10 @@
 /* globals
-
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Point3d } from "./Point3d.js";
+import { Point3d, Plane } from "./Point3d.js";
 import { AABB3d } from "./AABB3d.js";
 
 /**
@@ -18,6 +18,9 @@ import { AABB3d } from "./AABB3d.js";
  * The plane is derived from the points.
  * For performance, it is assumed that the first three points are not collinear and form a polane.
  */
+
+// TODO: Handle in the points class.
+function pointsAreCollinear() { return false; }
 
 export class Polygon3d {
   /** @type {Point3d} */
@@ -61,6 +64,27 @@ export class Polygon3d {
   }
 
   // ----- NOTE: Plane ----- //
+
+  #plane;
+
+  #dirtyPlane = true;
+
+  get dirtyPlane() { return this.#dirtyPlane; }
+
+  set dirtyPlane(value) { this.#dirtyPlane ||= value; }
+
+  get plane() {
+    if ( this.#dirtyPlane ) {
+      this.#plane ??= Plane.newInstance;
+      this._calculatePlane(this.#plane);
+    }
+    return this.#plane;
+  }
+
+  _calculatePlane(plane) {
+
+  }
+
 
   // ----- NOTE: Centroid calculation ----- //
 
@@ -106,7 +130,6 @@ export class Polygon3d {
     out ||= Point3d.newInstance;
     out.arr.fill(0);
 
-    const n = this.length;
     let a = this.points.at(-1);
     for ( const b of this.iteratePoints() ) {
       const cross = Point3d.constructor.cCross2d(a, b);
@@ -160,7 +183,6 @@ export class Polygon3d {
    * @returns {Polygon2d}
    */
   static withPoints(pts, plane) {
-    const n = pts.length;
     const poly = new this(0);
     poly.points = pts;
     poly.plane = plane;
@@ -180,7 +202,7 @@ export class Polygon3d {
       case PIXI.SHAPES.CIRCLE:
       case PIXI.SHAPES.ELLIPSE:
       case PIXI.SHAPES.RECTANGLE: pixiShape  = pixiShape.toPolygon();
-      case PIXI.SHAPES.POLY: {
+      case PIXI.SHAPES.POLY: { /* eslint-disable-line no-fallthrough */
         const ptsArr = pixiShape.points;
         const n = ptsArr.length;
         const out = new this(n);
@@ -233,7 +255,7 @@ export class Polygon3d {
    */
   *reverseIterateEdges() {
     let a = this.points.at(0);
-    for ( let i = this.points.length - 1; i > -1; i += 1 ) {
+    for ( let i = this.points.length - 1; i > -1; i -= 1 ) {
       const b = this.points[i];
       yield { a, b };
     }
@@ -244,12 +266,12 @@ export class Polygon3d {
    * @yield {Point3d}       Point of the polygon, not copied.
    */
   *reverseIteratePoints() {
-    for ( let i = this.points.length - 1; i > -1; i += 1 ) yield this.points[i];
+    for ( let i = this.points.length - 1; i > -1; i -= 1 ) yield this.points[i];
   }
 
 }
 
-export class Ellipse2d extends Polygon2d {
+export class Ellipse3d extends Polygon3d {
   /** @type {number} */
   semiMajor = 0;
 
@@ -270,7 +292,7 @@ export class Ellipse2d extends Polygon2d {
   constructor() { super(1); }
 }
 
-export class Circle2d extends Ellipse2d {
+export class Circle3d extends Ellipse3d {
   /** @type {number} */
   get radius() { return super.semiMajor; };
 
@@ -295,13 +317,61 @@ export class Circle2d extends Ellipse2d {
    * @returns {Circle2d}
    */
   fromPIXI(pixiCircle) {
-    const out = new this();
-    out.points[0].
+    // TODO: Implement.
 
   }
+
+  // ----- NOTE: Static methods ----- //
+
+  /**
+   * Remove collinear points.
+   * @param {Point3d[]} pts
+   * @returns {Point3d[]}
+   */
+  static removeCollinearPoints(pts) {
+    if ( pts.length < 2 ) return pts;
+    const iter = pts.values();
+    const result = [iter.next().value];
+    for ( const curr of iter ) {
+      if ( result.at(-1).almostEqual(curr) ) continue;
+      while ( result.length >= 2
+        && pointsAreCollinear(result.at(-2), result.at(-1), curr) ) result.pop().release();
+      result.push(curr);
+    }
+
+    // Clean up where end meets beginning.
+    // Loop b/c removing a point at a seam may expose a new collinearity.
+    while ( result.length >= 3 ) {
+      // Is the last point a duplicate of the first?
+      if ( result[0].almostEqual(result.at(-1)) ) {
+        result.pop().release();
+        break;
+      }
+
+      // Is the last point redundant? (2nd-to-last -> last -> first)
+      if ( pointsAreCollinear(result.at(-2), result.at(-1), result[0]) ) {
+        result.pop().release();
+        break;
+      }
+
+      // Is the first point redundant? (Last -> first -> second)
+      if ( pointsAreCollinear(result.at(-1), result.at(0), result[1]) ) {
+        result.shift().release(); // Remove the first point.
+        break;
+      }
+    }
+
+    // Copy over the points if necessary.
+    if ( result.length < pts.length ) {
+      pts.length = result.length;
+      pts.forEach((pt, idx) => pt.copyFrom(result[idx]));
+    }
+    return pts;
+  }
+
 }
 
-export class Segment2d extends Polygon2d {
+export class Segment3d extends Polygon3d {
   constructor() { super(2); }
 
   get a() { return this.points[0]; }
@@ -312,7 +382,7 @@ export class Segment2d extends Polygon2d {
   get center() { return Point3d.midPoint(this.points[0], this.points[1]); }
 
   /** @type {Line2d} */
-  get line() { return Line2d.fromPoints(this.points[0], this.points[1]); }
+  get line() { return HGEOM.Line2d.fromPoints(this.points[0], this.points[1]); }
 
   /**
    * Test if one finite line segment intersects another.
@@ -375,7 +445,7 @@ export class Segment2d extends Polygon2d {
   }
 }
 
-export class Triangle2d extends Polygon2d {
+export class Triangle3d extends Polygon3d {
   constructor() { super(3); }
 
   get a() { return this.points[0]; }
@@ -385,15 +455,10 @@ export class Triangle2d extends Polygon2d {
   get c() { return this.points[2]; }
 }
 
-export class Quad2d extends Polygon2d {
+export class Quad3d extends Polygon3d {
   constructor() { super(4); }
 }
 
-export class Rectangle2d extends Quad2d {
-
-  from
-
-}
 
 
 

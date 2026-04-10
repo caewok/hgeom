@@ -1,11 +1,10 @@
 /* globals
+HGEOM,
 */
 "use strict";
 
 import { PoolableMixin, BufferManager } from "./utils/Pool.js";
 import { mix } from "./utils/mixwith.js";
-import { HPointAbstract } from "./HPointAbstract.js";
-import { HPoint3d } from "./HPoint3d.js";
 
 // Basic matrix operations
 // May eventually replace with math.js (when installed, call "math" to get functions)
@@ -349,7 +348,7 @@ class MatrixAbstract {
   static fromHPoint(p) {
     const out = new this();
     out.nrow = 1;
-    out.ncol = p.constructor.DIMS + 1;
+    out.ncol = p.DIMS + 1;
     out.arr = p.arr;
     return out;
   }
@@ -376,47 +375,6 @@ class MatrixAbstract {
    for ( let i = 0; i < ln; i += 1 ) this.setIndex(i, i, c);
    return this;
  }
-
- /**
-   * Convert matrix to a homogenous point.
-   * Dimensions of the point match that of the matrix (row or column).
-   * If the matrix is 1xN or Nx1, the array buffer will be shared with the resulting point.
-   * @param {object} [opts]               Options to affect how the matrix is interpreted.
-   * @param {number} [opts.col]           If provided, this column will be used.
-   * @param {number} [opts.row]           If provided, this row will be used. If both are provided, column wins.
-   * @returns {HPointAbstract}
-   */
-  toHPoint({ col, row } = {}) {
-    // Default to the first column in a Nx1; first row in a 1xN matrix.
-    if ( this.nrow === 1 ) col ??= 0;
-    if ( this.ncol === 1 ) row ??= 0;
-
-    // Default to using the first row.
-    row ??= 0;
-
-    let pt;
-    if ( Number.isNumeric(col) ) {
-      if ( this.ncol === 1 ) {
-        pt = new HPointAbstract(this.nrow);
-        pt.arr = this.arr;
-      } else {
-        pt = HPointAbstract.create(this.nrow);
-        let i = 0;
-        for ( const value of this.iterateColumn(col) ) pt.arr[i++] = value;
-      }
-    } else {
-      if ( this.nrow === 1 ) {
-        pt = new HPointAbstract(this.ncol);
-        pt.arr = this.arr;
-      } else {
-        pt = HPointAbstract.create(this.ncol);
-        let i = 0;
-        for ( const value of this.iterateRow(row) ) pt.arr[i++] = value;
-      }
-    }
-    return pt;
-  }
-
 
   /**
    * Copy this matrix to a new matrix object.
@@ -620,16 +578,16 @@ class MatrixAbstract {
    */
   static lookAt(cameraPosition, targetPosition, up, M, Minv) {
     // NOTE: Foundry uses a left-hand coordinate system, with y reversed.
-    const zeroPt = HPoint3d.create;
-    using zAxis = HPoint3d.create;
+    const zeroPt = HGEOM.HPoint3d.create;
+    using zAxis = HGEOM.HPoint3d.create;
     cameraPosition.subtract(targetPosition, zAxis); // ZAxis = forward
     if ( zAxis.almostEqual(zeroPt) ) return { M: this.identity(4), Minv: this.identity(4) };
     zAxis.normalize(zAxis);
 
-    using xAxis = HPoint3d.create.set(1, 0, 0);
-    using yAxis = HPoint3d.create.set(0, 1, 0);
+    using xAxis = HGEOM.HPoint3d.create.set(1, 0, 0);
+    using yAxis = HGEOM.HPoint3d.create.set(0, 1, 0);
     if ( zAxis.x || zAxis.y ) {
-      using tmpUp = up ? HPoint3d.create.copyFrom(up) : HPoint3d.create.set(0, -1, 1);
+      using tmpUp = up ? HGEOM.HPoint3d.create.copyFrom(up) : HGEOM.HPoint3d.create.set(0, -1, 1);
       tmpUp.cross(zAxis, xAxis); // XAxis = right
       if ( xAxis.magnitudeSquared() ) xAxis.normalize(xAxis); // Don't normalize if 0, 0, 0
       zAxis.cross(xAxis, yAxis); // YAxis = up
@@ -1112,7 +1070,7 @@ class MatrixAbstract {
    * @param {Point3d} outPoint Optional point in which to store the result.
    * @returns {Point3d}
    */
-  multiplyPoint2d(point, outPoint = HPointAbstract.create(2)) {
+  multiplyPoint2d(point, outPoint = HGEOM.Point2d.newInstance) {
     // For speed, assume _idx is (col * this.nrow) + row
     // Array organized col0, row0, row1, row2, ... col1, row0, row1, ...
     const a00 = this.arr[0]; // aRC
@@ -1145,7 +1103,7 @@ class MatrixAbstract {
    * @param {Point3d} outPoint Optional point in which to store the result.
    * @returns {Point3d}
    */
-  multiplyPoint3d(point, outPoint = HPointAbstract.create(3)) {
+  multiplyPoint3d(point, outPoint = HGEOM.Point3d.newInstance) {
 
     // For speed, assume _idx is (col * this.nrow) + row
     // Array organized col0, row0, row1, row2, ... col1, row0, row1, ...

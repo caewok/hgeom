@@ -4,9 +4,9 @@
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { HPointAbstract } from "./HPointAbstract.js";
-import { PoolableMixin, BufferManager } from "./utils/Pool.js";
-import { mix } from "./utils/mixwith.js";
+import { HPointAbstract } from "../HPointAbstract.js";
+import { PoolableMixin, BufferManager } from "../utils/Pool.js";
+import { mix } from "../utils/mixwith.js";
 
 
 export class HPoint2d extends HPointAbstract {

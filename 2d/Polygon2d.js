@@ -376,12 +376,6 @@ export class Quad2d extends Polygon2d {
   constructor() { super(4); }
 }
 
-export class Rectangle2d extends Quad2d {
-
-  from
-
-}
-
 
 
 

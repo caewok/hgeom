@@ -5,7 +5,7 @@
 import { MODULE_ID } from "../../const.js";
 import { MODULE_ID as HGEOM_ID } from "../const.js";
 
-const TESTS = ["AABB2d", "HPoint2d", "HPoint3d", "Matrix", "Point3d"];
+const TESTS = ["PointArray", "HPoint2d", "HPoint3d", "Matrix", "Point3d"];
 
 export async function registerTests(quench) {
   for ( const name of TESTS ) {
