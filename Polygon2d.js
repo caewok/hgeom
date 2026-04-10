@@ -1,11 +1,11 @@
 /* globals
-
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Point2d } from "./Point2d.js";
-
+import { Point2d, Line2d } from "./Point2d.js";
+import { AABB2d } from "./AABB2d.js";
 
 /**
  * 2d polygon shapes.
@@ -37,6 +37,28 @@ export class Polygon2d {
 
   /** @type {number} */
   get length() { return this.points.length; }
+
+
+  // ----- NOTE: AABB ----- //
+
+  #aabb;
+
+  #dirtyAABB = true;
+
+  get dirtyAABB() { return this.#dirtyAABB; }
+
+  set dirtyAABB(value) { this.#dirtyAABB ||= value; }
+
+  get aabb() {
+    if ( this.#dirtyAABB ) {
+      this.#aabb ??= AABB2d.newInstance;
+      AABB2d.fromPolygon(this, this.#aabb);
+      this.#dirtyAABB = false;
+    }
+    return this.#aabb;
+  }
+
+  // ----- NOTE: Centroid calculation ----- //
 
   /**
    * Geometric centroid is the average of its vertices.
@@ -80,7 +102,6 @@ export class Polygon2d {
     out ||= Point2d.newInstance;
     out.arr.fill(0);
 
-    const n = this.length;
     let a = this.points.at(-1);
     for ( const b of this.iteratePoints() ) {
       const cross = Point2d.constructor.cCross2d(a, b);
@@ -130,7 +151,6 @@ export class Polygon2d {
    * @returns {Polygon2d}
    */
   static withPoints(pts) {
-    const n = pts.length;
     const poly = new this(0);
     poly.points = pts;
     return poly;
@@ -148,8 +168,8 @@ export class Polygon2d {
     switch ( pixiShape.type ) {
       case PIXI.SHAPES.CIRCLE:
       case PIXI.SHAPES.ELLIPSE:
-      case PIXI.SHAPES.RECTANGLE: pixiShape  = pixiShape.toPolgygon();
-      case PIXI.SHAPES.POLY: {
+      case PIXI.SHAPES.RECTANGLE: pixiShape  = pixiShape.toPolygon();
+      case PIXI.SHAPES.POLY: {  /* eslint-disable-line no-fallthrough */
         const ptsArr = pixiShape.points;
         const n = ptsArr.length;
         const out = new this(n);
@@ -202,7 +222,7 @@ export class Polygon2d {
    */
   *reverseIterateEdges() {
     let a = this.points.at(0);
-    for ( let i = this.points.length - 1; i > -1; i += 1 ) {
+    for ( let i = this.points.length - 1; i > -1; i -= 1 ) {
       const b = this.points[i];
       yield { a, b };
     }
@@ -213,7 +233,7 @@ export class Polygon2d {
    * @yield {Point2d}       Point of the polygon, not copied.
    */
   *reverseIteratePoints() {
-    for ( let i = this.points.length - 1; i > -1; i += 1 ) yield this.points[i];
+    for ( let i = this.points.length - 1; i > -1; i -= 1 ) yield this.points[i];
   }
 
 }
@@ -264,9 +284,7 @@ export class Circle2d extends Ellipse2d {
    * @returns {Circle2d}
    */
   fromPIXI(pixiCircle) {
-    const out = new this();
-    out.points[0].
-
+    // TODO: Implement.
   }
 }
 
