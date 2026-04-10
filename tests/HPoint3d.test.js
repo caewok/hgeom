@@ -13,7 +13,7 @@ export function runTests(context) {
       const pt = HPoint3d.newInstance;
       expect(pt).to.be.instanceof(HPoint3d);
       expect(pt.arr).to.be.instanceof(Float32Array);
-      expect(pt.arr.length).to.equal(HPoint3d.POINT_LENGTH);
+      expect(pt.arr.length).to.equal(pt.DIMS);
       pt.release();
     });
 
