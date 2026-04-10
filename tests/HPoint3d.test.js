@@ -12,8 +12,9 @@ export function runTests(context) {
    it("should acquire an object from the pool with an allocated array", () => {
       const pt = HPoint3d.newInstance;
       expect(pt).to.be.instanceof(HPoint3d);
+      expect(pt.DIMS).to.be.equal(3);
       expect(pt.arr).to.be.instanceof(Float32Array);
-      expect(pt.arr.length).to.equal(pt.DIMS);
+      expect(pt.arr.length).to.equal(4);
       pt.release();
     });
 
@@ -91,10 +92,10 @@ export function runTests(context) {
 
     it("should correctly calculate Cartesian x, y, z based on w", () => {
       const pt = HPoint3d.build(10, 20, 30, 2); // Homogeneous [10, 20, 30, 2]
-      expect(pt._x).to.equal(5);  // 10 / 2
-      expect(pt._y).to.equal(10); // 20 / 2
-      expect(pt._z).to.equal(15); // 30 / 2
-      expect(pt.x).to.equal(10);
+      expect(pt.x).to.equal(5);  // 10 / 2
+      expect(pt.y).to.equal(10); // 20 / 2
+      expect(pt.z).to.equal(15); // 30 / 2
+      expect(pt._x).to.equal(10);
       pt.release();
     });
 
@@ -112,12 +113,12 @@ export function runTests(context) {
     it("should perform Cartesian addition (cAdd)", () => {
       const p1 = HPoint3d.build(10, 10, 10, 2); // (5, 5, 5)
       const p2 = HPoint3d.build(2, 2, 2, 1);   // (2, 2, 2)
-      const out = p1.cAdd(p2);
+      const out = HPoint3d.cAdd(p1, p2);
 
       // (5 + 2) = 7. (5 + 2) = 7.
-      expect(out._x).to.equal(7);
-      expect(out._y).to.equal(7);
-      expect(out._z).to.equal(7);
+      expect(out.x).to.equal(7);
+      expect(out.y).to.equal(7);
+      expect(out.z).to.equal(7);
 
       HPoint3d.release(p1, p2, out);
     });
@@ -125,11 +126,11 @@ export function runTests(context) {
     it("should perform Cartesian multiplication (cMultiply)", () => {
       const p1 = HPoint3d.build(4, 4, 4, 2); // (2, 2)
       const p2 = HPoint3d.build(3, 3, 3, 1); // (3, 3)
-      const out = p1.cMultiply(p2);
+      const out = HPoint3d.cMultiply(p1, p2);
 
-      expect(out._x).to.equal(6);
-      expect(out._y).to.equal(6);
-      expect(out._z).to.equal(6);
+      expect(out.x).to.equal(6);
+      expect(out.y).to.equal(6);
+      expect(out.z).to.equal(6);
 
       HPoint3d.release(p1, p2, out);
     });
