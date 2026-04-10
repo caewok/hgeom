@@ -11,7 +11,7 @@ import { mix } from "./utils/mixwith.js";
 
 export class HPoint2d extends HPointAbstract {
 
-  static get DIMS() { return 2; }
+  DIMS = 2;
 
   static get newInstance() { return this.create(); }
 

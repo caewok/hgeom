@@ -16,30 +16,36 @@ export class HPoint3d extends HPointAbstract {
   // Convention: pt.x to access the Cartesian value, pt._x to access the underlying.
 
   /** @type {number} */
-  static get DIMS() { return 3; }
+  DIMS = 3;
+
+  static get newInstance() { return this.create(); }
 
   /** @type {number} */
   get x() { return this.arr[0] / (this.w || 1); }
 
   get _x() { return this.arr[0]; }
 
-  set _x(value) { return this.arr[0] = value; }
-
   set x(value) { this.arr[0] = value * (this.w || 1); }
 
-  get y() { return this.arr[1]; }
+  set _x(value) { return this.arr[0] = value; }
 
-  get _y() { return this.arr[1] / this.w; }
+  /** @type {number} */
+  get y() { return this.arr[1] / (this.w || 1); }
+
+  get _y() { return this.arr[1];  }
 
   set y(value) { this.arr[1] = value * (this.w || 1); }
 
+  set _y(value) { this.arr[1] = value; }
+
+  /** @type {number} */
   get z() { return this.arr[2] / (this.w || 1); }
 
   get _z() { return this.arr[2]; }
 
   set z(value) { this.arr[2] = value * (this.w || 1); }
 
-  set _z(value) { this.arr[2 = value; ]}
+  set _z(value) { this.arr[2] = value; }
 
 
   toString() { return `x: ${this.x.toFixed(2)}, y: ${this.y.toFixed(2)}, z: ${this.z.toFixed(2)}, w: ${this.w.toFixed(2)}`; }
@@ -48,6 +54,7 @@ export class HPoint3d extends HPointAbstract {
     return {
       x: this.x,
       y: this.y,
+      z: this.z,
       w: this.w,
     };
   }
@@ -61,7 +68,7 @@ export class HPoint3d extends HPointAbstract {
    */
   cross(b, c, out) {
     out ||= this.constructor.newInstance;
-    return this._constructor.cross([this, b, c], out);
+    return this.constructor.cross([this, b, c], out);
   }
 
 
