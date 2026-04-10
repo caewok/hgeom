@@ -120,19 +120,6 @@ export class HPoint2d extends HPointAbstract {
     const cw = c.w;
     return ((ac12 * bc02) - (ac02 * bc12)) / (a.w * b.w * cw * cw);
   }
-
-  /**
-   * Scalar triple, defined as a • (b x c)
-   * Also: a • (b x c) = (a x b) • c = b • (c x a) = c • (a x b) = (a x b) • c
-   * See https://en.m.wikipedia.org/wiki/Triple_product#Scalar_triple_product
-   * @param {HPoint2d} b              Vector
-   * @param {HPoint2d} c              Vector
-   * @returns {number}
-   */
-  scalarTriple(b, c) {
-    using bc = b.cross(c, bc);
-    return this.dot(bc);
-  }
 }
 
 /* TODO: Are swizzles worth the trouble?

@@ -26,6 +26,26 @@ export class Point3d extends HPoint3d {
     return a.cross(b, c, out);
   }
 
+  /**
+   * How is the point oriented in relation to three other points or two other vectors?
+   * @param {Point3d} a
+   * @param {Point3d} b
+   * @param {Point3d} [c]     Required for points, omitted for vectors
+   * @returns {number}
+   */
+  orient(a, b, c) {
+    if ( c ^ !c.isVector ) throw Error(`${this.constructor.name}|orient requires 3 points or 2 vectors`);
+    if ( c ) {
+      using v1 = b.subtract(a);
+      using v2 = c.subtract(a);
+      using v3 = this.subtract(a);
+      return this.constructor.scalarTriple(v1, v2, v3);
+    }
+    return this.constructor.scalarTriple(a, b, this);
+
+  }
+
+
 }
 
 /**

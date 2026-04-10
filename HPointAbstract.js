@@ -682,10 +682,11 @@ export class PointArray {
 
   /**
    * Vector triple: a x (b x c) = (a•c)b - (a•b)c
-   * @param {HPoint2d} b              Vector
-   * @param {HPoint2d} c              Vector
-   * @param {HPoint2d} [outPoint]
-   * @returns {HPoint2d} The out point
+   * @param {HPointArray} a              Vector
+   * @param {HPointArray} b              Vector
+   * @param {HPointArray} c              Vector
+   * @param {HPointArray} [outPoint]
+   * @returns {HPointArray} The out point
    */
   static vectorTriple(a, b, c, out) {
     out ||= this.create(a.DIMS);
@@ -694,6 +695,23 @@ export class PointArray {
     using scaledB = this.multiplyScalar(b, ac)
     using scaledC = this.multiplyScalar(c, ab);
     return this.subtract(scaledB, scaledC, out);
+  }
+
+  /**
+   * Scalar triple of three vectors a, b, c is a • (b x c).
+   * In 3d, it is the volume of the parallelepiped defined by the three vectors.
+   * In 3d, equals the determinant of the 3x3 matrix formed by the components of the three vectors.
+   * Cyclic permutations remain unchanged: a • (b x c) = b • (c x a) = c • (a x b).
+   * Switching any two vectors changes the sign: a • (b x c) = -a • (c x b).
+   * In 3d, the product equals 0 if the three vectors are coplanar or two vectors are parallel.
+   * @param {HPointArray} a              Vector
+   * @param {HPointArray} b              Vector
+   * @param {HPointArray} c              Vector
+   * @returns {number}
+   */
+  static scalarTriple(a, b, c) {
+    using xBC = b.cross(c);
+    return a.dot(xBC);
   }
 }
 
