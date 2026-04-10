@@ -20,6 +20,8 @@ export class HPoint3d extends HPointAbstract {
 
   static get newInstance() { return this.create(); }
 
+  static build(x, y, z = 0, w = 1) { return this.create().set(x, y, z, w); }
+
   /** @type {number} */
   get x() { return this.arr[0] / (this.w || 1); }
 

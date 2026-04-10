@@ -49,9 +49,17 @@ export class PointArray {
   }
 
   /**
+   * Create a new point and copy data to the array.
+   * Shortcut for create plus set.
+   * @param {...number} args
+   * @returns {HPointArray}
+   */
+  static build(...args) { return this.create(args.length).set(...args); }
+
+  /**
    * Create a new point that contains the same values as this one.
-   * @param {HPointAbstract} [out]            Object in which to store the cloned values
-   * @returns {HPointAbstract} The out object
+   * @param {HPointArray} [out]            Object in which to store the cloned values
+   * @returns {HPointArray} The out object
    */
   clone(out) {
     if ( out === this ) return out;
@@ -322,9 +330,9 @@ export class PointArray {
   /**
    * "Cartesian" divide as if non-homogenous points.
    * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {HPointAbstract} other      The other vector to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {HPointArray} other      The other vector to multiply
+   * @param {HPointArray} [out]      The object in which to store the result.
+   * @returns {HPointArray}
    */
   static cDivide(p1, p2, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
@@ -520,7 +528,7 @@ export class PointArray {
   /**
    * Perspective divide this point to convert it to standard 3D Cartesian point p.
    * @param {HPointAbstrat} out
-   * @returns {HPointAbstract} out  This point with w set to 1.
+   * @returns {HPointArray} out  This point with w set to 1.
    */
   perspectiveDivide(out) {
     if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
@@ -532,7 +540,7 @@ export class PointArray {
 
   /**
    * Dot product of this point with another.
-   * @param {HPointAbstract} other
+   * @param {HPointArray} other
    * @returns {number}
    */
   dot(other) { return this.constructor.dot(this, other); }
@@ -658,8 +666,8 @@ export class PointArray {
   /**
    * Cross two axes of two points
    * E.g., p1.x * p2.y - p2.x * p1.y or equally, p1.x * p2.y - p1.y * p2.x.
-   * @param {HPointAbstract} p1
-   * @param {HPointAbstract} p2
+   * @param {HPointArray} p1
+   * @param {HPointArray} p2
    * @param {number} idx1               First axis
    * @param {number} idx2               Second axis
    * @returns {number}
