@@ -10,7 +10,7 @@ export function runTests(context) {
   describe("HPointAbstract & Memory Management", () => {
 
    it("should acquire an object from the pool with an allocated array", () => {
-      const pt = HPoint2d.create;
+      const pt = HPoint2d.newInstance;
       expect(pt).to.be.instanceof(HPoint2d);
       expect(pt.arr).to.be.instanceof(Float32Array);
       expect(pt.arr.length).to.equal(HPoint2d.POINT_LENGTH);
@@ -19,7 +19,7 @@ export function runTests(context) {
 
     it("should correctly handle the 'using' pattern (Symbol.dispose)", () => {
       // Manual trigger of dispose to simulate 'using' block ending
-      const pt = HPoint2d.create;
+      const pt = HPoint2d.newInstance;
       pt[Symbol.dispose]();
       expect(pt._isInPool).to.be.true;
       expect(pt.arr.length).to.equal(0);
@@ -49,7 +49,7 @@ export function runTests(context) {
     });
 
     it("should update the underlying array when setting values", () => {
-      const pt = HPoint2d.create;
+      const pt = HPoint2d.newInstance;
       pt.w = 1;
       pt.x = 50;
       expect(pt.arr[0]).to.equal(50);
