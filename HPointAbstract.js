@@ -210,6 +210,82 @@ export class PointArray {
     return this.multiply(p1, out, out);
   }
 
+  /**
+   * Take the square root of this point or vector. Will create NaN values if the coordinate (or w) is negative.
+   * @param {PointArrayAbstract} [out]
+   * @returns {PointArrayAbstract}
+   */
+  static squareRoot(p1, out) {
+    // [x, y, w]: [Math.sqrt(x/w), Math.sqrt(y/w), 1] = [Math.sqrt(x)/Math.sqrt(w), Math.sqrt(y)/Math.sqrt(w), 1]
+    //  = [Math.sqrt(x), Math.sqrt(y), Math.sqrt(w)]
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.sqrt(a[i]);
+    return out;
+  }
+
+  /**
+   * Raise this point to a power.
+   * For points, will first get the GCD.
+   * @param {PointArrayAbstract} p1
+   * @param {number} exp            The exponent to use
+   * @param {PointArrayAbstract} [out]
+   * @returns {PointArrayAbstract}
+   */
+  static raiseToPower(p1, exp = 2, out) {
+    // [x, y, w] = [(x/w) ** 2, (y/w) ** 2, 1|0] = [x**2, y**2, w**2]
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.pow(a[i], exp);
+    return out;
+  }
+
+  /**
+   * Set each coordinate, including w, to the absolute value of the coordinate.
+   * @param {PointArrayAbstract} p1
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  static abs(p1, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.abs(a[i]);
+    return out;
+  }
+
+  /**
+   * Floor each coordinate, including w.
+   * @param {PointArrayAbstract} p1
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  static floor(p1, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.floor(a[i]);
+    return out;
+  }
+
+  /**
+   * Ceil each coordinate, including w.
+   * @param {PointArrayAbstract} p1
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  static ceil(p1, out) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.ceil(a[i]);
+    return out;
+  }
+
+
+
   // ---- NOTE: Static "Cartesian" non-homogenous math: Addition, subtraction, multiplication, division ----- //
 
   /**
@@ -485,6 +561,42 @@ export class PointArray {
    * @returns {PointArrayAbstract}
    */
   scale(c, out) { return this.constructor.multiplyScalar(this, c, out); }
+
+  /**
+   * Apply a function elementwise to each coordinate, including w.
+   * @param {function}
+   * - @param {number} value
+   * - @param {number} index
+   * - @param {number} w value
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  applyElementWise(callback, out) {
+    const nDims = this.DIMS;
+    out ||= this.constructor.create(nDims);
+    const a = this.arr;
+    const w = this.w;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
+    return out;
+  }
+
+  /**
+   * Apply a function elementwise to each coordinate, except w.
+   * @param {function}
+   * - @param {number} value
+   * - @param {number} index
+   * - @param {number} w value
+   * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @returns {PointArrayAbstract}
+   */
+  applyCoordinateWise(callback, out) {
+    const nDims = this.DIMS;
+    out ||= this.constructor.create(nDims);
+    const a = this.arr;
+    const w = this.w;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
+    return out;
+  }
 
   // ----- NOTE: Matrix transform ----- //
 
