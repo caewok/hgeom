@@ -608,8 +608,8 @@ export class PointArray {
    */
   transform(M, out) {
     out ||= this.constructor.create(this.DIMS);
-    const mPoint = Matrix.fromHPoint(this);
-    const mOut = Matrix.fromHPoint(out); // Will share the array.
+    const mPoint = HGEOM.Matrix.fromHPoint(this);
+    const mOut = HGEOM.Matrix.fromHPoint(out); // Will share the array.
     mPoint.multiply(M, mOut);
     return out;
   }
@@ -639,10 +639,10 @@ export class PointArray {
     if ( a.isVector && b.isVector ) throw Error(`${this.name}|unitVectorBetween requires points.`);
     // See https://web.engr.oregonstate.edu/~mjb/cs557/Handouts/homogcoords.1pp.pdf
     // GCD
-    const nDims = p1.DIMS;
+    const nDims = a.DIMS;
     out ||= this.create(nDims);
-    const m1 = p1.w || 1;
-    const m2 = p2.w || 1;
+    const m1 = a.w || 1;
+    const m2 = b.w || 1;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
 
     // Ignore the denominator.
@@ -830,7 +830,7 @@ export class PointArray {
    * In 3d, it is the volume of the parallelepiped defined by the three vectors.
    * In 3d, equals the determinant of the 3x3 matrix formed by the components of the three vectors.
    * Cyclic permutations remain unchanged: a • (b x c) = b • (c x a) = c • (a x b).
-   * Switching any two vectors changes the sign: a • (b x c) = -a • (c x b).
+   * Switching any two vectors changes the sign: a • (b x c) = -a • (c x b).
    * In 3d, the product equals 0 if the three vectors are coplanar or two vectors are parallel.
    * @param {HPointArray} a              Vector
    * @param {HPointArray} b              Vector

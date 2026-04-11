@@ -1,4 +1,5 @@
 /* globals
+HGEOM,
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -156,8 +157,7 @@ export class Polygon3d {
    */
   static create(n = 3) {
     const poly = new this(n);
-    const pts = Point3d.allocate(n + 1);
-    poly.plane = pts.shift(); // Preferable to have the plane be first in the array.
+    const pts = Point3d.allocateNObjects(n);
     poly.points = pts;
     return poly;
   }

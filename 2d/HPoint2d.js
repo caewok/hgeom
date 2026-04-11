@@ -1,12 +1,10 @@
 /* globals
-
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { HPointAbstract } from "../HPointAbstract.js";
-import { PoolableMixin, BufferManager } from "../utils/Pool.js";
-import { mix } from "../utils/mixwith.js";
 
 
 export class HPoint2d extends HPointAbstract {
@@ -29,7 +27,7 @@ export class HPoint2d extends HPointAbstract {
 
   set x(value) { this.arr[0] = value * (this.w || 1); }
 
-  set _x(value) { return this.arr[0] = value; }
+  set _x(value) { this.arr[0] = value; }
 
   /** @type {number} */
   get y() { return this.arr[1] / (this.w || 1); }
@@ -38,7 +36,7 @@ export class HPoint2d extends HPointAbstract {
 
   set y(value) { this.arr[1] = value * (this.w || 1); }
 
-  set _y(value) { return this.arr[1] = value; }
+  set _y(value) { this.arr[1] = value; }
 
   // ----- NOTE: PIXI conversion ----- //
 
@@ -80,7 +78,7 @@ export class HPoint2d extends HPointAbstract {
     out.arr[0] = x;
     out.arr[1] = y;
     out.arr[2] = w;
-    return outPoint;
+    return out;
   }
 
   /*
@@ -94,31 +92,13 @@ export class HPoint2d extends HPointAbstract {
   • D = 0: vectors are perpendicular
   angle between is cos-1(a•b / |a|•|b|) where || is magnitude
   */
+  orient(a, b) {
+    if ( this.isVector ) return this.constructor.cross2d(this, a);
 
-  /**
-   * Determine the relative orientation of three points in two-dimensional space.
-   * The result is also an approximation of twice the signed area of the triangle defined by the three points.
-   * This method is fast - but not robust against issues of floating point precision. Best used with integer coordinates.
-   * Adapted from https://github.com/mourner/robust-predicates.
-   * @param {HPoint2d} a     An endpoint of segment AB, relative to which point C is tested
-   * @param {HPoint2d} b     An endpoint of segment AB, relative to which point C is tested
-   * @param {HPoint2d} c     A point that is tested relative to segment AB
-   * @returns {number}    The relative orientation of points A, B, and C
-   *                      A positive value if the points are in counter-clockwise order (C lies to the left of AB)
-   *                      A negative value if the points are in clockwise order (C lies to the right of AB)
-   *                      Zero if the points A, B, and C are collinear.
-   */
-  static cOrient(a, b, c) {
-    // ac: a - c: a.x*c.w - c.x*a.w, a.y*c.w - c.y*a.w, a.w*c.w
-    // bc: b - c: b.x*c.w - c.x*b.w, b.y*c.w - c.y*b.w, b.w*c.w
-    // cross2d: ac.y * bc.x - ac.x * bc.y; w = ac.w * bc.w
-    // (a.y⋅c.w−c.y⋅a.w)(b.x⋅c.w−c.x⋅b.w)−(a.x⋅c.w−c.x⋅a.w)(b.y⋅c.w−c.y⋅b.w)
-    const ac12 = this.cross2d(a, c, 1, 2);
-    const bc02 = this.cross2d(b, c, 0, 2);
-    const ac02 = this.cross2d(a, c, 0, 2);
-    const bc12 = this.cross2d(b, c, 1, 2);
-    const cw = c.w;
-    return ((ac12 * bc02) - (ac02 * bc12)) / (a.w * b.w * cw * cw);
+    // Could create a line:
+    // Line2d.fromPoints(a, b).orient(this).
+    // For performance, calculate directly using the scalar triple.
+    return this.constructor.scalarTriple(a, b, this);
   }
 
   /**
@@ -128,7 +108,7 @@ export class HPoint2d extends HPointAbstract {
    * @returns {HPoint2d}
    */
   transform(M, out) {
-    const out ||= this.constructor.newInstance;
+    out ||= this.constructor.newInstance;
     const a = M.arr;
     const b = this.arr;
 

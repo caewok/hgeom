@@ -228,10 +228,11 @@ export class AABB2d {
     // Iterating the points will determine the min/max values.
     out ||= this.newInstance;
     const { x, y } = ellipse.center;
+    const { semiMajor, semiMinor } = ellipse.semiMajor;
     const rot = ellipse.rotation;
     if ( !rot ) {
-      out.min.set(x - r, y - r);
-      out.max.set(x + r, y + r);
+      out.min.set(x - semiMajor, y - semiMinor);
+      out.max.set(x + semiMajor, y + semiMinor);
       return out;
     }
 

@@ -1,11 +1,14 @@
 /* globals
 HGEOM,
+PIXI,
 */
 "use strict";
 
 export function runTests(context) {
-  const { describe, it, expect } = context;
+  const { describe, it, expect, after, before } = context;
   const Polygon2d = HGEOM.Polygon2d;
+  const Point2d = HGEOM.Point2d;
+  const Segment2d = HGEOM.Segment2d;
 
   describe("Polygon2d", () => {
     describe("Lifecycle & Allocation", () => {

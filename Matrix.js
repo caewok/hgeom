@@ -979,10 +979,10 @@ class MatrixAbstract {
    * @returns {Matrix}
    */
   multiply(other, out) {
-    const rowsA = A.nrow;
-    const colsA = A.ncol;
-    const rowsB = B.nrow;
-    const colsB = B.ncol;
+    const rowsA = this.nrow;
+    const colsA = this.ncol;
+    const rowsB = other.nrow;
+    const colsB = other.ncol;
 
     if ( colsA !== rowsB || out.nrow !== rowsA || out.ncol !== colsB ) {
       console.error("Matrices cannot be multiplied.");
