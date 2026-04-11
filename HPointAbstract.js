@@ -486,6 +486,22 @@ export class PointArray {
    */
   scale(c, out) { return this.constructor.multiplyScalar(this, c, out); }
 
+  // ----- NOTE: Matrix transform ----- //
+
+  /**
+   * Multiply this point by a matrix.
+   * @param {Matrix} M
+   * @param {PointArray} [out]
+   * @returns {PointArray}
+   */
+  transform(M, out) {
+    out ||= this.constructor.create(this.DIMS);
+    const mPoint = Matrix.fromHPoint(this);
+    const mOut = Matrix.fromHPoint(out); // Will share the array.
+    mPoint.multiply(M, mOut);
+    return out;
+  }
+
   // ----- NOTE: Vectorize ----- //
 
   /**

@@ -120,6 +120,41 @@ export class HPoint2d extends HPointAbstract {
     const cw = c.w;
     return ((ac12 * bc02) - (ac02 * bc12)) / (a.w * b.w * cw * cw);
   }
+
+  /**
+   * Transform a point by a 3x3 matrix.
+   * @param {Matrix<3x3} M
+   * @param {HPoint2d} out
+   * @returns {HPoint2d}
+   */
+  transform(M, out) {
+    const out ||= this.constructor.newInstance;
+    const a = M.arr;
+    const b = this.arr;
+
+    const a00 = a[0];
+    const a01 = a[1];
+    const a02 = a[2];
+
+    const a10 = a[3];
+    const a11 = a[4];
+    const a12 = a[5];
+
+    const a20 = a[6];
+    const a21 = a[7];
+    const a22 = a[8];
+
+    const b00 = b[0];
+    const b01 = b[1];
+    const b02 = b[2];
+
+    const o = out.arr;
+    o[0] = a00 * b00 + a10 * b01 + a20 * b02;
+    o[1] = a01 * b00 + a11 * b01 + a21 * b02;
+    o[2] = a02 * b00 + a12 * b01 + a22 * b02;
+
+    return out;
+  }
 }
 
 /* TODO: Are swizzles worth the trouble?

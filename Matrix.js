@@ -58,7 +58,7 @@ class MatrixAbstract {
   /** @type {number} */
   get size() { return this.nrow * this.ncol; }
 
-  // Row major, so row 0, col0, col1, ... row 1, col0, col1, ...
+  // Row major, so row 0: col0, col1, ... row 1: col0, col1, ...
   _idx(row, col) { return (row * this.ncol) + col; }
 
   getIndex(row, col) { return this.arr[this._idx(row, col)]; }
@@ -122,6 +122,8 @@ class MatrixAbstract {
     }
     return out;
   }
+
+
 
   // ----- NOTE: Iterators ----- //
 
@@ -346,35 +348,66 @@ class MatrixAbstract {
    * @returns {MatrixAbstract}
    */
   static fromHPoint(p) {
-    const out = new this();
+    const out = super.create();
     out.nrow = 1;
     out.ncol = p.DIMS + 1;
     out.arr = p.arr;
     return out;
   }
 
- /**
-  * Set every element to 0.
-  * @returns {this} For convenience.
-  */
- zero() { this.arr.fill(0); return this; }
+  /**
+   * Create a point from a 1x3 or 1x4 matrix.
+   * This method shares the same array buffer as the matrix, such that changing one changes the other.
+   * Unless the matrix is not a 1xN matrix, in which case the row or col are copied.
+   * @returns (PointArray|Point2d|Point3d)
+   */
+  toHPoint({ row = -1, col = -1, out } = {}) {
+    const { nrow, ncol } = this;
+    const n = Math.max(nrow, ncol);
+    if ( !out ) {
+      const cl = n === 3 ? HGEOM.Point2d : n === 4 ? HGEOM.Point3d : HGEOM.PointArray;
+      out = cl.pool.acquire;
+    }
 
- /**
-  * Set every element except the diagonal to 0. Diagonals set to 1.
-  * @returns {this} For convenience.
-  */
- identity() { this.arr.fill(0); this.setDiagonal(() => 1); return this; }
+    // Use this Matrix's array
+    if ( nrow === 1 || ncol === 1 ) out.arr = this.arr;
 
- /**
-  * Set diagonal to a constant.
-  * @param {number} [c=1]     Constant to use
-  * @returns {this} For convenience
-  */
- setConstantDiagonal(c = 1) {
+    // Use row and column number to select.
+    else if ( ~row ) {
+      const i = this._idx(row, 0);
+      out.arr.set(this.arr.slice(i, i + ncol));
+    }
+
+    else if ( ~col ) {
+      for ( let r = 0, i = 0; r < nrow; r += 1 ) out.arr[i++] = this.getIndex(r, col);
+    }
+
+    else throw Error(`${this.constructor.name}|toPoint|Either column or row must be specified for this ${nrow}x${ncol} matrix.`);
+    return out;
+  }
+
+  /**
+   * Set every element to 0.
+   * @returns {this} For convenience.
+   */
+  zero() { this.arr.fill(0); return this; }
+
+  /**
+   * Set every element except the diagonal to 0. Diagonals set to 1.
+   * @returns {this} For convenience.
+   */
+  identity() { this.arr.fill(0); this.setDiagonal(() => 1); return this; }
+
+  /**
+   * Set diagonal to a constant.
+   * @param {number} [c=1]     Constant to use
+   * @returns {this} For convenience
+   */
+  setConstantDiagonal(c = 1) {
    const ln = Math.min(this.nrow, this.ncol);
    for ( let i = 0; i < ln; i += 1 ) this.setIndex(i, i, c);
    return this;
- }
+  }
 
   /**
    * Copy this matrix to a new matrix object.
@@ -946,33 +979,30 @@ class MatrixAbstract {
    * @returns {Matrix}
    */
   multiply(other, out) {
-    let A = this;
-    let B = other;
-
     const rowsA = A.nrow;
     const colsA = A.ncol;
     const rowsB = B.nrow;
     const colsB = B.ncol;
-
-    out ||= this.constructor.zeroes(rowsA, colsB, out)
 
     if ( colsA !== rowsB || out.nrow !== rowsA || out.ncol !== colsB ) {
       console.error("Matrices cannot be multiplied.");
       return undefined;
     }
 
-    // Cannot have the out reference A or B, because the out values get modified in the loop.
-    if ( A === out ) A = A.clone();
-    if ( B === out ) B = B.clone();
+    out ||= this.constructor.empty(rowsA, colsB, out);
 
+    // Create a flat buffer to hold results.
+    // This avoids having to zero the out matrix and avoids testing for whether to clone
+    // this or other in the event that this or other equal the out matrix.
+    const buffer = new Float32Array(rowsA * colsB);
     for ( let x = 0; x < rowsA; x += 1 ) {
       for ( let y = 0; y < colsB; y += 1 ) {
-        for ( let z = 0; z < colsA; z += 1 ) {
-          const value = out.getIndex(x, y) + (this.getIndex(x, z) * other.getIndex(z, y));
-          out.setIndex(x, y, value);
-        }
+        let sum = 0;
+        for ( let z = 0; z < colsA; z += 1 ) sum += this.getIndex(x, z) * other.getIndex(z, y);
+        buffer[this._idx(x, y)] = sum;
       }
     }
+    out.arr.set(buffer);
     return out;
   }
 
@@ -1054,89 +1084,9 @@ class MatrixAbstract {
   }
 
   multiplyPoint(point, out) {
-    if ( point.constructor.DIMS === 2 ) return this.multiplyPoint2d(point, out);
-    if ( point.constructor.DIMS === 3 ) return this.multiplyPoint3d(point, out);
-
     using matPt = this.fromHPoint(point);
     this.multiply(matPt, matPt);
     return this.toHPoint(matPt, out);
-  }
-
-  /**
-   * Multiply a Point2d by this matrix and output a different Point3d.
-   * For speed, the input is not checked against the matrix for correct dimensionality.
-   * Foundry bench puts this at ~ 68% of multiply.
-   * @param {Point3d} point    The point to multiply
-   * @param {Point3d} outPoint Optional point in which to store the result.
-   * @returns {Point3d}
-   */
-  multiplyPoint2d(point, outPoint = HGEOM.Point2d.newInstance) {
-    // For speed, assume _idx is (col * this.nrow) + row
-    // Array organized col0, row0, row1, row2, ... col1, row0, row1, ...
-    const a00 = this.arr[0]; // aRC
-    const a01 = this.arr[1];
-    const a02 = this.arr[2];
-
-    const a10 = this.arr[3];
-    const a11 = this.arr[4];
-    const a12 = this.arr[5];
-
-    const a20 = this.arr[6];
-    const a21 = this.arr[7];
-    const a22 = this.arr[8];
-
-    const b00 = point.x;
-    const b01 = point.y;
-    const b02 = point.w ?? 1;
-
-    outPoint.x = a00 * b00 + a10 * b01 + a20 * b02;
-    outPoint.y = a01 * b00 + a11 * b01 + a21 * b02;
-    outPoint.w = a02 * b00 + a12 * b01 + a22 * b02;
-    return outPoint;
-  }
-
-  /**
-   * Multiply a Point3d by this matrix and output a different Point3d.
-   * For speed, the input is not checked against the matrix for correct dimensionality.
-   * Foundry bench puts this at ~ 68% of multiply.
-   * @param {Point3d} point    The point to multiply
-   * @param {Point3d} outPoint Optional point in which to store the result.
-   * @returns {Point3d}
-   */
-  multiplyPoint3d(point, outPoint = HGEOM.Point3d.newInstance) {
-
-    // For speed, assume _idx is (col * this.nrow) + row
-    // Array organized col0, row0, row1, row2, ... col1, row0, row1, ...
-    const a00 = this.arr[0]; // aRC
-    const a01 = this.arr[1];
-    const a02 = this.arr[2];
-    const a03 = this.arr[3];
-
-    const a10 = this.arr[4];
-    const a11 = this.arr[5];
-    const a12 = this.arr[6];
-    const a13 = this.arr[7];
-
-    const a20 = this.arr[8];
-    const a21 = this.arr[9];
-    const a22 = this.arr[10];
-    const a23 = this.arr[11];
-
-    const a30 = this.arr[12];
-    const a31 = this.arr[13];
-    const a32 = this.arr[14];
-    const a33 = this.arr[15];
-
-    const b00 = point.x;
-    const b01 = point.y;
-    const b02 = point.z;
-    const b03 = point.w ?? 1;
-
-    outPoint.x = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
-    outPoint.y = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
-    outPoint.z = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
-    outPoint.w = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
-    return outPoint;
   }
 
   /**
