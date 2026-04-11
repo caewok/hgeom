@@ -227,22 +227,31 @@ export class AABB2d {
   static fromEllipse2d(ellipse, out) {
     // Iterating the points will determine the min/max values.
     out ||= this.newInstance;
-    out._clear();
-    const { min, max } = out;
-    const center = ellipse.center;
-
-    // TODO: Handle rotated ellipses; handle circles separately.
-    out.min.set(center.x - ellipse.semiMajor, center.y - ellipse.semiMinor);
-    out.max.set(center.x + ellipse.semiMajor, center.y + ellipse.semiMajor);
-
-    for ( const pt of ellipse.iteratePoints() ) {
-      if ( pt.w !== 1 ) pt.perspectiveDivide(pt);
-      min._x = Math.min(pt.x, min._x);
-      min._y = Math.min(pt.y, min._y);
-
-      max._x = Math.max(pt.x, max._x);
-      max._y = Math.max(pt.y, max._y);
+    const { x, y } = ellipse.center;
+    const rot = ellipse.rotation;
+    if ( !rot ) {
+      out.min.set(x - r, y - r);
+      out.max.set(x + r, y + r);
+      return out;
     }
+
+    using halfExtents = ellipse.halfExtents();
+    out.min.set(x - halfExtents._x, y - halfExtents._y);
+    out.max.set(x + halfExtents._x, y + halfExtents._y);
+    return out;
+  }
+
+  /**
+   * @param {Circle2d} circle
+   * @param {AABB2d} [out]      Where to store the resulting aabb
+   * @returns {AABB2d}
+   */
+  static fromCircle2d(circle, out) {
+    out ||= this.newInstance;
+    const { x, y } = circle.center;
+    const r = circle.radius;
+    out.min.set(x - r, y - r);
+    out.max.set(x + r, y + r);
     return out;
   }
 
