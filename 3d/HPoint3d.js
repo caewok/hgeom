@@ -5,8 +5,6 @@
 "use strict";
 
 import { HPointAbstract } from "../HPointAbstract.js";
-import { PoolableMixin, BufferManager } from "../utils/Pool.js";
-import { mix } from "../utils/mixwith.js";
 
 
 export class HPoint3d extends HPointAbstract {
@@ -29,7 +27,7 @@ export class HPoint3d extends HPointAbstract {
 
   set x(value) { this.arr[0] = value * (this.w || 1); }
 
-  set _x(value) { return this.arr[0] = value; }
+  set _x(value) { this.arr[0] = value; }
 
   /** @type {number} */
   get y() { return this.arr[1] / (this.w || 1); }
@@ -80,7 +78,7 @@ export class HPoint3d extends HPointAbstract {
    * @returns {HPoint3d}
    */
   transform(M, out) {
-    const out ||= this.constructor.newInstance;
+    out ||= this.constructor.newInstance;
     const a = M.arr;
     const b = this.arr;
 
@@ -116,6 +114,7 @@ export class HPoint3d extends HPointAbstract {
     o[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
 
     return out;
+  }
 }
 
 /*

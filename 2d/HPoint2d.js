@@ -1,12 +1,10 @@
 /* globals
-
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
 import { HPointAbstract } from "../HPointAbstract.js";
-import { PoolableMixin, BufferManager } from "../utils/Pool.js";
-import { mix } from "../utils/mixwith.js";
 
 
 export class HPoint2d extends HPointAbstract {
@@ -29,7 +27,7 @@ export class HPoint2d extends HPointAbstract {
 
   set x(value) { this.arr[0] = value * (this.w || 1); }
 
-  set _x(value) { return this.arr[0] = value; }
+  set _x(value) { this.arr[0] = value; }
 
   /** @type {number} */
   get y() { return this.arr[1] / (this.w || 1); }
@@ -38,7 +36,7 @@ export class HPoint2d extends HPointAbstract {
 
   set y(value) { this.arr[1] = value * (this.w || 1); }
 
-  set _y(value) { return this.arr[1] = value; }
+  set _y(value) { this.arr[1] = value; }
 
   // ----- NOTE: PIXI conversion ----- //
 
@@ -80,7 +78,7 @@ export class HPoint2d extends HPointAbstract {
     out.arr[0] = x;
     out.arr[1] = y;
     out.arr[2] = w;
-    return outPoint;
+    return out;
   }
 
   /*
@@ -128,7 +126,7 @@ export class HPoint2d extends HPointAbstract {
    * @returns {HPoint2d}
    */
   transform(M, out) {
-    const out ||= this.constructor.newInstance;
+    out ||= this.constructor.newInstance;
     const a = M.arr;
     const b = this.arr;
 

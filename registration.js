@@ -1,4 +1,6 @@
 /* globals
+HGEOM,
+Hooks,
 */
 "use strict";
 

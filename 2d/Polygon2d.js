@@ -135,7 +135,7 @@ export class Polygon2d {
    */
   static create(n = 3) {
     const poly = new this(n);
-    poly.points = Point2d.allocate(n);
+    poly.points = Point2d.allocateNObjects(n);
     return poly;
   }
 
@@ -355,7 +355,6 @@ export class Ellipse2d extends Polygon2d {
    * @returns {Ellipse2d}
    */
   fromPIXI(pixiEllipse) {
-    const ptsArr =
     const out = this.create();
     out.center._x = pixiEllipse.x;
     out.center._y = pixiEllipse.y;
