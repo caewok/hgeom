@@ -71,6 +71,29 @@ export class HPoint3d extends HPointAbstract {
     return this.constructor.cross([this, b, c], out);
   }
 
+  /*
+  Orientation of a point in relation to three points that form a plane.
+  • C > 0: Point d is above the plane (right-hand rule for a -> b -> c)
+  • C < 0: Point d is below the palne
+  • C = 0: Coplanar
+  *
+  * @param {HPoint3d} a         Point or vector, depending on whether this is a vector
+  * @param {HPoint3d} b         Point or vector, depending on whether this is a vector
+  * @param {HPoint3d} [c]       Required third point if this is not a vector
+  * @returns {number}
+  */
+  orient(a, b, c) {
+    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
+
+    // Could create a plane:
+    // Plane.fromPoints(a, b, c).orient(this).
+    // For performance, calculate directly using the scalar triple.
+    // Could also take the determinate of the 4 x 4 matrix
+    using xABC = a.cross(b, c);
+    return xABC.dot(this);
+  }
+
+
   /**
    * Transform a point by a 4x4 matrix.
    * @param {Matrix<4x4} M
