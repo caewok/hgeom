@@ -10,16 +10,17 @@ export function runTests(context) {
   describe("HPointAbstract & Memory Management", () => {
 
    it("should acquire an object from the pool with an allocated array", () => {
-      const pt = HPoint2d.create;
+      const pt = HPoint2d.newInstance;
       expect(pt).to.be.instanceof(HPoint2d);
+      expect(pt.DIMS).to.equal(2);
       expect(pt.arr).to.be.instanceof(Float32Array);
-      expect(pt.arr.length).to.equal(HPoint2d.POINT_LENGTH);
+      expect(pt.arr.length).to.equal(3);
       pt.release();
     });
 
     it("should correctly handle the 'using' pattern (Symbol.dispose)", () => {
       // Manual trigger of dispose to simulate 'using' block ending
-      const pt = HPoint2d.create;
+      const pt = HPoint2d.newInstance;
       pt[Symbol.dispose]();
       expect(pt._isInPool).to.be.true;
       expect(pt.arr.length).to.equal(0);
@@ -42,14 +43,14 @@ export function runTests(context) {
 
     it("should correctly calculate Cartesian x and y based on w", () => {
       const pt = HPoint2d.build(10, 20, 2); // Homogeneous [10, 20, 2]
-      expect(pt._x).to.equal(5);  // 10 / 2
-      expect(pt._y).to.equal(10); // 20 / 2
-      expect(pt.x).to.equal(10);
+      expect(pt.x).to.equal(5);  // 10 / 2
+      expect(pt.y).to.equal(10); // 20 / 2
+      expect(pt._x).to.equal(10);
       pt.release();
     });
 
     it("should update the underlying array when setting values", () => {
-      const pt = HPoint2d.create;
+      const pt = HPoint2d.newInstance;
       pt.w = 1;
       pt.x = 50;
       expect(pt.arr[0]).to.equal(50);
@@ -62,11 +63,11 @@ export function runTests(context) {
     it("should perform Cartesian addition (cAdd)", () => {
       const p1 = HPoint2d.build(10, 10, 2); // (5, 5)
       const p2 = HPoint2d.build(2, 2, 1);   // (2, 2)
-      const out = p1.cAdd(p2);
+      const out = HPoint2d.cAdd(p1, p2);
 
       // (5 + 2) = 7. (5 + 2) = 7.
-      expect(out._x).to.equal(7);
-      expect(out._y).to.equal(7);
+      expect(out.x).to.equal(7);
+      expect(out.y).to.equal(7);
 
       HPoint2d.release(p1, p2, out);
     });
@@ -74,10 +75,10 @@ export function runTests(context) {
     it("should perform Cartesian multiplication (cMultiply)", () => {
       const p1 = HPoint2d.build(4, 4, 2); // (2, 2)
       const p2 = HPoint2d.build(3, 3, 1); // (3, 3)
-      const out = p1.cMultiply(p2);
+      const out = HPoint2d.cMultiply(p1, p2);
 
-      expect(out._x).to.equal(6);
-      expect(out._y).to.equal(6);
+      expect(out.x).to.equal(6);
+      expect(out.y).to.equal(6);
 
       HPoint2d.release(p1, p2, out);
     });
@@ -93,7 +94,7 @@ export function runTests(context) {
       const p1 = HPoint2d.build(1, 0, 1);
       const p2 = HPoint2d.build(0, 1, 1);
       // (1*1) - (0*0) = 1
-      expect(p1.cross2d(p2)).to.equal(1);
+      expect(HPoint2d.cross2d(p1, p2)).to.equal(1);
       HPoint2d.release(p1, p2);
     });
   });

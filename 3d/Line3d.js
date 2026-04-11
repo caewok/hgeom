@@ -126,7 +126,7 @@ export class Line3d {
   distanceSquaredFromPoint(pt) {
     // Distance from the point p is the magnitude of the cross product of the point and direction.
     // Must use cartesian point coordinates.
-    using pt.perspectiveDivide();
+    pt.perspectiveDivide();
     using xd = pt.cross(this.direction);
     xd.subtract(this.moment, xd);
     return xd.magnitudeSquared();

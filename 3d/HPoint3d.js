@@ -20,6 +20,8 @@ export class HPoint3d extends HPointAbstract {
 
   static get newInstance() { return this.create(); }
 
+  static build(x, y, z = 0, w = 1) { return this.create().set(x, y, z, w); }
+
   /** @type {number} */
   get x() { return this.arr[0] / (this.w || 1); }
 
@@ -71,32 +73,49 @@ export class HPoint3d extends HPointAbstract {
     return this.constructor.cross([this, b, c], out);
   }
 
-
   /**
-   * Determine the relative orientation of four points in three-dimensional space.
-   * The result is also an approximation of twice the signed area of the triangle defined by the three points.
-   * This method is fast - but not robust against issues of floating point precision. Best used with integer coordinates.
-   * Adapted from https://github.com/mourner/robust-predicates.
-   * @param {HPoint2d} a     An endpoint of segment AB, relative to which point C is tested
-   * @param {HPoint2d} b     An endpoint of segment AB, relative to which point C is tested
-   * @param {HPoint2d} c     A point that is tested relative to segment AB
-   * @returns {number}    The relative orientation of points A, B, and C
-   *                      A positive value if the points are in counter-clockwise order (C lies to the left of AB)
-   *                      A negative value if the points are in clockwise order (C lies to the right of AB)
-   *                      Zero if the points A, B, and C are collinear.
+   * Transform a point by a 4x4 matrix.
+   * @param {Matrix<4x4} M
+   * @param {HPoint3d} out
+   * @returns {HPoint3d}
    */
-  static cOrient3d(a, b, c) {
-    // ac: a - c: a.x*c.w - c.x*a.w, a.y*c.w - c.y*a.w, a.w*c.w
-    // bc: b - c: b.x*c.w - c.x*b.w, b.y*c.w - c.y*b.w, b.w*c.w
-    // cross2d: ac.y * bc.x - ac.x * bc.y; w = ac.w * bc.w
-    // (a.y⋅c.w−c.y⋅a.w)(b.x⋅c.w−c.x⋅b.w)−(a.x⋅c.w−c.x⋅a.w)(b.y⋅c.w−c.y⋅b.w)
-    using ac12 = this.cross2d(a, c, 1, 2);
-    using bc02 = this.cross2d(b, c, 0, 2);
-    using ac02 = this.cross2d(a, c, 0, 2);
-    using bc12 = this.cross2d(b, c, 1, 2);
-    const cw = c.w;
-    return ((ac12 * bc02) - (ac02 * bc12)) / (a.w * b.w * cw * cw);
-  }
+  transform(M, out) {
+    const out ||= this.constructor.newInstance;
+    const a = M.arr;
+    const b = this.arr;
+
+    const a00 = a[0];
+    const a01 = a[1];
+    const a02 = a[2];
+    const a03 = a[3];
+
+    const a10 = a[4];
+    const a11 = a[5];
+    const a12 = a[6];
+    const a13 = a[7];
+
+    const a20 = a[8];
+    const a21 = a[9];
+    const a22 = a[10];
+    const a23 = a[11];
+
+    const a30 = a[12];
+    const a31 = a[13];
+    const a32 = a[14];
+    const a33 = a[15];
+
+    const b00 = b[0];
+    const b01 = b[1];
+    const b02 = b[2];
+    const b03 = b[3];
+
+    const o = out.arr;
+    o[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
+    o[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
+    o[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
+    o[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
+
+    return out;
 }
 
 /*

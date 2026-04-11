@@ -49,9 +49,17 @@ export class PointArray {
   }
 
   /**
+   * Create a new point and copy data to the array.
+   * Shortcut for create plus set.
+   * @param {...number} args
+   * @returns {HPointArray}
+   */
+  static build(...args) { return this.create(args.length).set(...args); }
+
+  /**
    * Create a new point that contains the same values as this one.
-   * @param {HPointAbstract} [out]            Object in which to store the cloned values
-   * @returns {HPointAbstract} The out object
+   * @param {HPointArray} [out]            Object in which to store the cloned values
+   * @returns {HPointArray} The out object
    */
   clone(out) {
     if ( out === this ) return out;
@@ -179,7 +187,7 @@ export class PointArray {
     const a = p.arr;
     let denom = 1;
     for ( let i = 0; i < nDims; i += 1 ) {
-      out.arr[i] = a.w;
+      out.arr[i] = a[nDims];
       denom *= a[i];
     }
     out.w = denom;
@@ -288,7 +296,7 @@ export class PointArray {
     // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
     // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
     const nDims = p1.DIMS;
-    out ||= this.constructor.create;
+    out ||= this.create(nDims);
     const a = p1.arr;
     const b = p2.arr;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
@@ -322,9 +330,9 @@ export class PointArray {
   /**
    * "Cartesian" divide as if non-homogenous points.
    * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {HPointAbstract} other      The other vector to multiply
-   * @param {HPointAbstract} [out]      The object in which to store the result.
-   * @returns {HPointAbstract}
+   * @param {HPointArray} other      The other vector to multiply
+   * @param {HPointArray} [out]      The object in which to store the result.
+   * @returns {HPointArray}
    */
   static cDivide(p1, p2, out) {
     // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
@@ -478,6 +486,22 @@ export class PointArray {
    */
   scale(c, out) { return this.constructor.multiplyScalar(this, c, out); }
 
+  // ----- NOTE: Matrix transform ----- //
+
+  /**
+   * Multiply this point by a matrix.
+   * @param {Matrix} M
+   * @param {PointArray} [out]
+   * @returns {PointArray}
+   */
+  transform(M, out) {
+    out ||= this.constructor.create(this.DIMS);
+    const mPoint = Matrix.fromHPoint(this);
+    const mOut = Matrix.fromHPoint(out); // Will share the array.
+    mPoint.multiply(M, mOut);
+    return out;
+  }
+
   // ----- NOTE: Vectorize ----- //
 
   /**
@@ -520,7 +544,7 @@ export class PointArray {
   /**
    * Perspective divide this point to convert it to standard 3D Cartesian point p.
    * @param {HPointAbstrat} out
-   * @returns {HPointAbstract} out  This point with w set to 1.
+   * @returns {HPointArray} out  This point with w set to 1.
    */
   perspectiveDivide(out) {
     if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
@@ -532,7 +556,7 @@ export class PointArray {
 
   /**
    * Dot product of this point with another.
-   * @param {HPointAbstract} other
+   * @param {HPointArray} other
    * @returns {number}
    */
   dot(other) { return this.constructor.dot(this, other); }
@@ -658,8 +682,8 @@ export class PointArray {
   /**
    * Cross two axes of two points
    * E.g., p1.x * p2.y - p2.x * p1.y or equally, p1.x * p2.y - p1.y * p2.x.
-   * @param {HPointAbstract} p1
-   * @param {HPointAbstract} p2
+   * @param {HPointArray} p1
+   * @param {HPointArray} p2
    * @param {number} idx1               First axis
    * @param {number} idx2               Second axis
    * @returns {number}
@@ -674,10 +698,11 @@ export class PointArray {
 
   /**
    * Vector triple: a x (b x c) = (a•c)b - (a•b)c
-   * @param {HPoint2d} b              Vector
-   * @param {HPoint2d} c              Vector
-   * @param {HPoint2d} [outPoint]
-   * @returns {HPoint2d} The out point
+   * @param {HPointArray} a              Vector
+   * @param {HPointArray} b              Vector
+   * @param {HPointArray} c              Vector
+   * @param {HPointArray} [outPoint]
+   * @returns {HPointArray} The out point
    */
   static vectorTriple(a, b, c, out) {
     out ||= this.create(a.DIMS);
@@ -686,6 +711,23 @@ export class PointArray {
     using scaledB = this.multiplyScalar(b, ac)
     using scaledC = this.multiplyScalar(c, ab);
     return this.subtract(scaledB, scaledC, out);
+  }
+
+  /**
+   * Scalar triple of three vectors a, b, c is a • (b x c).
+   * In 3d, it is the volume of the parallelepiped defined by the three vectors.
+   * In 3d, equals the determinant of the 3x3 matrix formed by the components of the three vectors.
+   * Cyclic permutations remain unchanged: a • (b x c) = b • (c x a) = c • (a x b).
+   * Switching any two vectors changes the sign: a • (b x c) = -a • (c x b).
+   * In 3d, the product equals 0 if the three vectors are coplanar or two vectors are parallel.
+   * @param {HPointArray} a              Vector
+   * @param {HPointArray} b              Vector
+   * @param {HPointArray} c              Vector
+   * @returns {number}
+   */
+  static scalarTriple(a, b, c) {
+    using xBC = b.cross(c);
+    return a.dot(xBC);
   }
 }
 
