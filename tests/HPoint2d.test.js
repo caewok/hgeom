@@ -97,6 +97,37 @@ export function runTests(context) {
       expect(HPoint2d.cross2d(p1, p2)).to.equal(1);
       HPoint2d.release(p1, p2);
     });
+
+    it("should calculate orientation", () => {
+      const a = HPoint2d.build(0, 0, 1);
+      const b = HPoint2d.build(1, 0, 1);
+      const c = HPoint2d.build(0, 1, 1);
+
+      // Testing a point (d) relative to the line formed by a, b
+      const orientation = c.orient(a, b);
+      expect(orientation).to.not.equal(0);
+    });
+
+    it("should calculate orientation similar to Foundry", () => {
+      const a = HPoint2d.build(0, 0, 1);
+      const b = HPoint2d.build(1, 0, 1);
+      const c = HPoint2d.build(0, 1, 1);
+
+      // Testing a point (d) relative to the line formed by a, b
+      const orientation = c.orient(a, b);
+      expect(orientation).to.equal(foundry.utils.orient2dFast(a, b, c));
+    });
+  });
+
+  describe("Transform", () => {
+    it("should translate a point correctly", () => {
+      const translate = Matrix.translation(10, 20);
+      const pt = new HPoint3d(0, 0, 0);
+      const result = pt.transform(translate);
+      expect(result.x).to.equal(10);
+      expect(result.y).to.equal(20);
+      expect(result.z).to.equal(30);
+    });
   });
 
   describe("BufferManager Edge Cases", () => {

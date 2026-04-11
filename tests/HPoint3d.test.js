@@ -77,14 +77,25 @@ export function runTests(context) {
     });
 
     it("should calculate orientation (cOrient3d)", () => {
-      const a = HPoint3d.create().set(0, 0, 0, 1);
-      const b = HPoint3d.create().set(1, 0, 0, 1);
-      const c = HPoint3d.create().set(0, 1, 0, 1);
-      const d = HPoint3d.create().set(0, 0, 1, 1);
+      const a = HPoint3d.build(0, 0, 0, 1);
+      const b = HPoint3d.build(1, 0, 0, 1);
+      const c = HPoint3d.build(0, 1, 0, 1);
+      const d = HPoint3d.build(0, 0, 1, 1);
 
       // Testing a point (d) relative to the plane formed by a, b, c
-      const orientation = HPoint3d.cOrient3d(a, b, c, d);
+      const orientation = d.orient(a, b, c);
       expect(orientation).to.not.equal(0);
+    });
+  });
+
+  describe("Transform", () => {
+    it("should translate a point correctly", () => {
+      const translate = Matrix.translation(10, 20, 30);
+      const pt = new HPoint3d(0, 0, 0);
+      const result = pt.transform(translate);
+      expect(result.x).to.equal(10);
+      expect(result.y).to.equal(20);
+      expect(result.z).to.equal(30);
     });
   });
 
