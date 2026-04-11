@@ -692,7 +692,7 @@ class MatrixAbstract {
    * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationX(angle, d3 = true, out) {
+  static rotationX(angle, { d3 = true, out } = {}) {
     const n = 3 + d3;
     out ||= this.empty(n);
     out.identity();
@@ -730,7 +730,7 @@ class MatrixAbstract {
    * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationY(angle, d3 = true, out) {
+  static rotationY(angle, { d3 = true, out } = {}) {
     const n = 3 + d3;
     out ||= this.empty(n);
     out.identity();
@@ -767,7 +767,7 @@ class MatrixAbstract {
    * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationZ(angle, d3 = true, out) {
+  static rotationZ(angle, { d3 = true, out } = {}) {
     const n = 3 + d3;
     out ||= this.empty(n);
     out.identity();
@@ -806,7 +806,7 @@ class MatrixAbstract {
    * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationXYZ(angleX, angleY, angleZ, d3 = true, out) {
+  static rotationXYZ({ angleX, angleY, angleZ, d3 = true, out } = {}) {
     out = angleX ? this.rotationX(angleX, d3, out) : angleY
       ? this.rotationY(angleY, d3, out) : angleZ
         ? this.rotationZ(angleZ, d3, out) : out.identity();
@@ -823,7 +823,7 @@ class MatrixAbstract {
     return out;
   }
 
-  static translation(x = 0, y = 0, z, out) {
+  static translation({ x = 0, y = 0, z, out } = {}) {
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();
@@ -845,7 +845,7 @@ class MatrixAbstract {
     return out;
   }
 
-  static scale(x = 1, y = 1, z, out) {
+  static scale({ x = 1, y = 1, z, out } = {}) {
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();
@@ -871,7 +871,7 @@ class MatrixAbstract {
    * @param {number} angle  Angle, in radians
    * @param {Point3d} axis  Axis
    */
-  static rotationAngleAxis(angle, axis) {
+  static rotationAngleAxis(angle, axis, out) {
     axis.normalize(axis);
 
     let c = Math.cos(angle);
@@ -898,7 +898,7 @@ class MatrixAbstract {
       xz - ys, yz + xs, c + (axis.z * axis.z * cNeg), 0,
 
       0, 0, 0, 1
-    ]);
+    ], 4, 4, out);
   }
 
 
@@ -984,12 +984,12 @@ class MatrixAbstract {
     const rowsB = other.nrow;
     const colsB = other.ncol;
 
+    out ||= this.constructor.empty(rowsA, colsB);
+
     if ( colsA !== rowsB || out.nrow !== rowsA || out.ncol !== colsB ) {
       console.error("Matrices cannot be multiplied.");
       return undefined;
     }
-
-    out ||= this.constructor.empty(rowsA, colsB, out);
 
     // Create a flat buffer to hold results.
     // This avoids having to zero the out matrix and avoids testing for whether to clone
