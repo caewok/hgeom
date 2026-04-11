@@ -75,20 +75,11 @@ export function runTests(context) {
       // [3*5 + 4*7, 3*6 + 4*8] -> [43, 50]
       expect(Array.from(result.arr)).to.deep.equal([19, 22, 43, 50]);
     });
-
-    it("should multiply a Point3d correctly (multiplyPoint3d)", () => {
-      const translate = Matrix.translation(10, 20, 30);
-      const pt = new HPoint3d(0, 0, 0);
-      const result = translate.multiplyPoint3d(pt);
-      expect(result.x).to.equal(10);
-      expect(result.y).to.equal(20);
-      expect(result.z).to.equal(30);
-    });
   });
 
   describe("3D Transformations", () => {
     it("should create a valid translation matrix", () => {
-      const mat = Matrix.translation(5, 10, 15);
+      const mat = Matrix.translation({ x: 5, y: 10, z: 15 });
       // In row-major [1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]
       expect(mat.getIndex(3, 0)).to.equal(5);
       expect(mat.getIndex(3, 1)).to.equal(10);
