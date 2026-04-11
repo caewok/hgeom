@@ -52,18 +52,25 @@ export class Polygon2d {
   get aabb() {
     if ( this.#dirtyAABB ) {
       this.#aabb ??= AABB2d.newInstance;
-      AABB2d.fromPolygon(this, this.#aabb);
+      this.calculateAABB(this.#aabb);
       this.#dirtyAABB = false;
     }
     return this.#aabb;
   }
+
+  /**
+   * Calculate the bounding box for this polygon.
+   * @param {AABB2d} [out]
+   * @returns {AABB2d}
+   */
+  calculateAABB(out) { return AABB2d.fromPolygon2d(this, out); }
 
   // ----- NOTE: Centroid calculation ----- //
 
   /**
    * Geometric centroid is the average of its vertices.
    * @param {Point2d} out
-   * @returns {Point2d
+   * @returns {Point2d}
    */
   normalizedGeometricCentroid(out) {
     out ||= Point2d.newInstance;
@@ -71,8 +78,8 @@ export class Polygon2d {
     const n = this.length;
     for ( let i = 0; i < n; i += 1 ) {
       const pt = this.points[i];
-      out.x += pt.x;
-      out.y += pt.y;
+      out._x += pt.x;
+      out._y += pt.y;
     }
     out.n = n;
     return out;
@@ -105,9 +112,9 @@ export class Polygon2d {
     let a = this.points.at(-1);
     for ( const b of this.iteratePoints() ) {
       const cross = Point2d.constructor.cCross2d(a, b);
-      out.x += (a.x + b.x) * cross;
-      out.y += (a.y + b.y) * cross;
-      out.w += cross;
+      out._x += (a.x + b.x) * cross;
+      out._y += (a.y + b.y) * cross;
+      out._w += cross;
     }
 
     // The Cartesian area is areaSum / 2.
@@ -172,7 +179,7 @@ export class Polygon2d {
       case PIXI.SHAPES.POLY: {  /* eslint-disable-line no-fallthrough */
         const ptsArr = pixiShape.points;
         const n = ptsArr.length;
-        const out = new this(n);
+        const out = this.create(n);
         for ( let i = 0, j = 0; i < n; i += 1 ) {
           // w is already set to 1 for each point on creation.
           const pt = out.points[i];
@@ -191,6 +198,42 @@ export class Polygon2d {
   toPIXI() { return new PIXI.Polygon(this.points); } // This will divide by w for each point.
 
   // ----- NOTE: Iterators ----- //
+
+  /**
+   * Execute a function for each edge.
+   * Avoids allocating temporary edge objects.
+   * @param {function} callback
+   *   - @param {Point2d} a
+   *   - @param {Point2d} b
+   */
+  forEachEdge(callback) {
+    const n = this.length;
+    if ( n < 2 ) return;
+    let a = this.points[n - 1];
+    for ( let i = 0; i < n; i += 1 ) {
+      const b = this.points[i];
+      callback(a, b);
+      a = b;
+    }
+  }
+
+  /**
+   * Execute a function for each edge.
+   * Avoids allocating temporary edge objects.
+   * @param {function} callback
+   *   - @param {Point2d} a
+   *   - @param {Point2d} b
+   */
+  reverseForEachEdge(callback) {
+    const n = this.length;
+    if ( n < 2 ) return;
+    let a = this.points[0];
+    for ( let i = n - 1; i > -1; i -= 1 ) {
+      const b = this.points[i];
+      callback(a, b);
+      a = b;
+    }
+  }
 
   /**
    * Iterate the edges of this polygon.
@@ -245,6 +288,9 @@ export class Ellipse2d extends Polygon2d {
   /** @type {number} */
   semiMinor = 0;
 
+  /** @type {number} */
+  rotation = 0;
+
   get width() { return this.semiMajor; }
 
   get height() { return this.semiMinor; }
@@ -257,6 +303,66 @@ export class Ellipse2d extends Polygon2d {
   get center() { return this.points[0]; }
 
   constructor() { super(1); }
+
+  // ----- NOTE: Getters ----- //
+
+  /**
+   * A vector representing the half-extent from the center.
+   * (Maximum x and y values based on rotation.)
+   * @param {Point2d} [out]
+   * @returns {Point2d} A 2d vector
+   */
+  halfExtentsSquared(out) {
+    out ||= HGEOM.Point2d.newInstance;
+    out.w = 0;
+    const rot = this.rotation;
+    if ( !rot ) {
+      out._x = this.semiMajor;
+      out._y = this.semiMinor;
+      return out;
+    }
+
+    // Precalculations.
+    const a2 = ellipse.semiMajor ** 2;
+    const b2 = ellipse.semiMinor ** 2;
+    const cos2 = Math.cos(rot) ** 2;
+    const sin2 = Math.sin(rot) ** 2;
+
+    out._x = (a2 * cos2) + (b2 * sin2);
+    out._y = (a2 * sin2) + (b2 * cos2);
+    return out;
+  }
+
+  halfExtents(out) {
+    out = this.halfExtents(out);
+    return out.constructor.squareRoot(out);
+  }
+
+  // ----- NOTE: AABB ----- //
+
+  /**
+   * Calculate the bounding box for this polygon.
+   * @param {AABB2d} [out]
+   * @returns {AABB2d}
+   */
+  calculateAABB(out) { return AABB2d.fromEllipse2d(this, out); }
+
+  // ----- NOTE: PIXI conversion ----- //
+
+  /**
+   * Convert a PIXI.Ellipse to Ellipse2d.
+   * @param {PIXI.Ellipse|PIXI.Circle} pixiEllipse
+   * @returns {Ellipse2d}
+   */
+  fromPIXI(pixiEllipse) {
+    const ptsArr =
+    const out = this.create();
+    out.center._x = pixiEllipse.x;
+    out.center._y = pixiEllipse.y;
+    out.semiMajor = pixiEllipse.width;
+    out.semiMinor = pixiEllipse.height;
+    return out;
+  }
 }
 
 export class Circle2d extends Ellipse2d {
@@ -272,20 +378,25 @@ export class Circle2d extends Ellipse2d {
 
   get semiMinor() { return super.semiMinor; }
 
-  constructor() {
-    super(1);
-  }
+  set semiMajor(value) { super.semiMajor = value; super.semiMinor = value; }
 
-  // ----- NOTE: PIXI conversion ----- //
+  set semiMinor(value) { super.semiMajor = value; super.semiMinor = value; }
+
+  get rotation() { return 0; }
+
+  constructor() {
+    super();
+    delete this.semiMajor;
+    delete this.semiMinor;
+    delete this.rotation;
+  }
 
   /**
-   * Convert a PIXI.Circle to Circle2d.
-   * @param {PIXI.Circle} pixiCircle
-   * @returns {Circle2d}
+   * Calculate the bounding box for this polygon.
+   * @param {AABB2d} [out]
+   * @returns {AABB2d}
    */
-  fromPIXI(pixiCircle) {
-    // TODO: Implement.
-  }
+  calculateAABB(out) { return AABB2d.fromCircle2d(this, out); }
 }
 
 export class Segment2d extends Polygon2d {
@@ -343,7 +454,7 @@ export class Segment2d extends Polygon2d {
 
   /**
    * Determine if a point P is between A and B.
-   * Works by checking if (P-A) â€¢ (B-A) is between 0 and |B-A|^2
+   * Works by checking if (P-A) ¥ (B-A) is between 0 and |B-A|^2
    * @param {Point2d} pt
    * @returns {boolean}
    */
