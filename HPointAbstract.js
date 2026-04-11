@@ -40,11 +40,24 @@ export class PointArray {
    * @param {number} nDims            Number of dimensions
    * @returns {PointArrayAbstract}
    */
-  static create(nDims) {
+  static create(nDims = 2) {
     const out = new this();
     out.arr.length = nDims + 1;
     out.arr.fill(0);
     out.w = 1;
+    return out;
+  }
+
+  /**
+   * Create an array of points.
+   * Only a placeholder; used by child classes to create points that share an array buffer.
+   * @param {number} n          Number of objects to creaete
+   * @param {number} [nDims=2]  How many dimensions
+   * @returns {PointArray[n]}
+   */
+  static allocateNObjects(n, nDims = 2) {
+    const out = Array(n);
+    for ( let i = 0; i < n; i += 1 ) out[i] = this.create(nDims);
     return out;
   }
 
