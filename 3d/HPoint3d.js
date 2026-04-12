@@ -47,6 +47,28 @@ export class HPoint3d extends HPointAbstract {
 
   set _z(value) { this.arr[2] = value; }
 
+  /**
+   * Copy points from a given object.
+   * If the object contains w, will copy directly.
+   * Otherwise will set x and y, setting w to 1.
+   * @param {object}
+   * @returns {HPoint2d}
+   */
+  copyFrom(obj, out) {
+    super.copyFrom(obj, out);
+
+    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+
+    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+
+    if ( Object.hasOwn(obj, "_z") ) out._z = obj._z;
+    else if ( Object.hasOwn(obj, "z") ) out._z = obj.z;
+
+    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+  }
+
 
   toString() { return `x: ${this.x.toFixed(2)}, y: ${this.y.toFixed(2)}, z: ${this.z.toFixed(2)}, w: ${this.w.toFixed(2)}`; }
 

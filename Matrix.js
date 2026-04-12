@@ -348,7 +348,7 @@ class MatrixAbstract {
    * @returns {MatrixAbstract}
    */
   static fromHPoint(p) {
-    const out = super.create();
+    const out = new this();
     out.nrow = 1;
     out.ncol = p.DIMS + 1;
     out.arr = p.arr;

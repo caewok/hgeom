@@ -38,6 +38,27 @@ export class HPoint2d extends HPointAbstract {
 
   set _y(value) { this.arr[1] = value; }
 
+  // ----- NOTE: Copying ----- //
+
+  /**
+   * Copy points from a given object.
+   * If the object contains w, will copy directly.
+   * Otherwise will set x and y, setting w to 1.
+   * @param {object}
+   * @returns {HPoint2d}
+   */
+  copyFrom(obj, out) {
+    super.copyFrom(obj, out);
+
+    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+
+    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+
+    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+  }
+
   // ----- NOTE: PIXI conversion ----- //
 
   /**

@@ -91,6 +91,34 @@ export class PointArray {
     return this;
   }
 
+  /**
+   * Copy points from a given object.
+   * If the object contains w, will copy directly.
+   * Otherwise will set x and y, setting w to 1.
+   * @param {object} obj
+   * @param {PointArray} out
+   * @returns {PointArray}
+   */
+  copyFrom(obj, out) {
+    if ( obj instanceof Matrix ) obj = obj.arr;
+
+    // Arrays, TypedArrays, Matrix.
+    if ( Array.isArray(obj) || ArrayBuffer.isView(obj) ) {
+      out ||= this.constructor.create(obj.length - 1); // Need the DIMS, which is assumed to not include w.
+      for ( let i = 0; n = Math.min(out.DIMS + 1, obj.length); i < n; i += 1 ) out.arr[i] = obj[i];
+    }
+
+    // PointArray.
+    else if ( obj instanceof HGEOM.PointArray ) {
+      out ||= this.constructor.create(obj.DIMS)
+      // Allow copying of objects with different dimensions.
+      for ( let i = 0; n = Math.min(out.DIMS, obj.DIMS); i < n; i += 1 ) out.arr[i] = obj.arr[i];
+      out.w = obj.w;
+    }
+
+    // Otherwise don't copy.
+    return out;
+  }
 
   // ----- NOTE: Property getters ----- //
 
