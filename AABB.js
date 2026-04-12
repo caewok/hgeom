@@ -73,7 +73,7 @@ export class AABB {
    */
   static create() {
     const aabb = new this();
-    const pts = this.constructor.pointClass.allocateNObjects(2);
+    const pts = this.pointClass.allocateNObjects(2);
     aabb.min = pts[0];
     aabb.max = pts[1];
     aabb._clear();
