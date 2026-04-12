@@ -134,7 +134,7 @@ export class Plane extends HPoint3d {
     if ( !other.normalized ) other.normalize;
 
     // Ah x Bh, where h indicates the normal of each.
-    this.constructor.cross3d(this, other, out.direction);
+    this.constructor.crossVectors(this, other, out.direction);
 
     // AoBh - BoAh. Photogrammetric Computer Vision.
     using nB = other.normal.scale(this.d);
