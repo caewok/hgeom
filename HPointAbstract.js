@@ -20,6 +20,12 @@ export class PointArray {
   /** @type {Float32Array} */
   arr = []; // Could set to null but this provides better compatibility.
 
+  get isNormalizedEuclidean() {
+    return this.w === 1 || this.w === 0;
+  }
+
+  get isNormalizedSpherical() { return this.magnitudeSquared === 1; }
+
   // ----- NOTE: Instance check ----- //
 
   /**
@@ -100,19 +106,19 @@ export class PointArray {
    * @returns {PointArray}
    */
   copyFrom(obj, out) {
-    if ( obj instanceof Matrix ) obj = obj.arr;
+    if ( obj instanceof HGEOM.Matrix ) obj = obj.arr;
 
     // Arrays, TypedArrays, Matrix.
     if ( Array.isArray(obj) || ArrayBuffer.isView(obj) ) {
       out ||= this.constructor.create(obj.length - 1); // Need the DIMS, which is assumed to not include w.
-      for ( let i = 0; n = Math.min(out.DIMS + 1, obj.length); i < n; i += 1 ) out.arr[i] = obj[i];
+      for ( let i = 0, n = Math.min(out.DIMS + 1, obj.length); i < n; i += 1 ) out.arr[i] = obj[i];
     }
 
     // PointArray.
     else if ( obj instanceof HGEOM.PointArray ) {
       out ||= this.constructor.create(obj.DIMS)
       // Allow copying of objects with different dimensions.
-      for ( let i = 0; n = Math.min(out.DIMS, obj.DIMS); i < n; i += 1 ) out.arr[i] = obj.arr[i];
+      for ( let i = 0, n = Math.min(out.DIMS, obj.DIMS); i < n; i += 1 ) out.arr[i] = obj.arr[i];
       out.w = obj.w;
     }
 
@@ -884,6 +890,8 @@ export class PointArray {
   }
 }
 
+
+
 /**
  * Two choices: Either subclass with the Pool mixin, or create a new mixin to be
  * applied per-point. (e.g. PointPoolMixin = superclass => class extends PoolableMixin(superclass))
@@ -984,5 +992,27 @@ export class HPointAbstract extends mix(PointArray).with(PoolableMixin) {
     return this.create.set(...args);
   }
 }
+
+// ----- NOTE: Aliases ----- //
+/**
+ * Euclidean normalization. Vector w set to 1.
+ * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+ * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
+ * @param {HPointAbstract} out
+ * @returns {HPointArray} out
+ */
+PointArray.prototype.euclideanNormalization = PointArray.prototype.perspectiveDivide;
+
+/**
+ * Spherical normalization. Vector normalized to 1.
+ * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+ * Resulting vectors lie on a sphere.
+ * Points xs and -xs represent the same 2d point. Can be used in oriented projective geometry
+ * to distinguish between lines with different orientation.
+ * @param {HPointAbstract} out
+ * @returns {HPointArray} out
+ */
+PointArray.prototype.sphericalNormalization = PointArray.prototype.normalize;
+
 
 function isOddFast(n) { return (n & 1) === 1; }
