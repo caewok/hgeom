@@ -105,14 +105,15 @@ export class HPoint3d extends HPointAbstract {
   * @returns {number}
   */
   orient(a, b, c) {
-    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
+    // Y is reversed so must negate.
+    if ( this.isVector ) return -this.constructor.scalarTriple(a, b, this);
 
     // Could create a plane:
     // Plane.fromPoints(a, b, c).orient(this).
     // For performance, calculate directly using the scalar triple.
     // Could also take the determinate of the 4 x 4 matrix
     using xABC = a.cross(b, c);
-    return xABC.dot(this);
+    return -xABC.dot(this);
   }
 
 

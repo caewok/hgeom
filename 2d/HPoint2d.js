@@ -114,12 +114,13 @@ export class HPoint2d extends HPointAbstract {
   angle between is cos-1(a•b / |a|•|b|) where || is magnitude
   */
   orient(a, b) {
-    if ( this.isVector ) return this.constructor.cross2d(this, a);
+    // Y is reversed, so must negate the orientation.
+    if ( this.isVector ) return -this.constructor.cross2d(this, a);
 
     // Could create a line:
     // Line2d.fromPoints(a, b).orient(this).
     // For performance, calculate directly using the scalar triple.
-    return this.constructor.scalarTriple(a, b, this);
+    return -this.constructor.scalarTriple(a, b, this);
   }
 
   /**

@@ -799,14 +799,14 @@ class MatrixAbstract {
   }
 
   /**
-   * Combine rotation matrixes for x, y, and z.
+   * Combine rotation matrixes for x, y, and z. If z is defined, will create a 4x4 matrix.
    * @param {number} angleX   Radians
    * @param {number} angleY   Radians
    * @param {number} angleZ   Radians
-   * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationXYZ({ angleX, angleY, angleZ, d3 = true, out } = {}) {
+  static rotationXYZ({ x: angleX, y: angleY, z: angleZ } = {}, out) {
+    const d3 = typeof angleZ === "undefined" && !(out && Object.hasOwn(out, "z"));
     out = angleX ? this.rotationX(angleX, d3, out) : angleY
       ? this.rotationY(angleY, d3, out) : angleZ
         ? this.rotationZ(angleZ, d3, out) : out.identity();
@@ -823,7 +823,7 @@ class MatrixAbstract {
     return out;
   }
 
-  static translation({ x = 0, y = 0, z, out } = {}) {
+  static translation({ x = 0, y = 0, z } = {}, out) {
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();
@@ -845,7 +845,7 @@ class MatrixAbstract {
     return out;
   }
 
-  static scale({ x = 1, y = 1, z, out } = {}) {
+  static scale({ x = 1, y = 1, z } = {}, out) {
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();

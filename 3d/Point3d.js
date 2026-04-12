@@ -81,9 +81,9 @@ export class Plane extends HPoint3d {
    * @param {Point3d} pt
    * @returns {number}
    */
-  whichSide(pt) { return this.dot(pt); }
+  whichSide(pt) { return Math.sign(this.orient(pt)); }
 
-  orient(pt) { return this.dot(pt); }
+  orient(pt) { return -this.dot(pt); }
 
   // ----- NOTE: Intersection tests ----- //
 

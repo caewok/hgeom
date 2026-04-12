@@ -6,6 +6,7 @@ HGEOM,
 export function runTests(context) {
   const { describe, it, expect } = context;
   const HPoint2d = HGEOM.HPoint2d;
+  const Matrix = HGEOM.Matrix;
 
   describe("HPointAbstract & Memory Management", () => {
 
@@ -108,7 +109,7 @@ export function runTests(context) {
       expect(orientation).to.not.equal(0);
     });
 
-    it("should calculate orientation similar to Foundry", () => {
+    it("should calculate orientation like Foundry", () => {
       const a = HPoint2d.build(0, 0, 1);
       const b = HPoint2d.build(1, 0, 1);
       const c = HPoint2d.build(0, 1, 1);
@@ -121,12 +122,12 @@ export function runTests(context) {
 
   describe("Transform", () => {
     it("should translate a point correctly", () => {
-      const translate = Matrix.translation(10, 20);
-      const pt = new HPoint3d(0, 0, 0);
+      const translate = Matrix.translation({ x: 10, y: 20 });
+      const pt = HPoint2d.newInstance;
       const result = pt.transform(translate);
       expect(result.x).to.equal(10);
       expect(result.y).to.equal(20);
-      expect(result.z).to.equal(30);
+      expect(result.w).to.equal(1);
     });
   });
 
