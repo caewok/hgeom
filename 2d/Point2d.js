@@ -19,7 +19,7 @@ export class Point2d extends HPoint2d {
    * @param {Point2d} out
    * @returns {Point2d}
    */
-  static midPoint(a, b) { return a.add(b, out); }
+  static midPoint(a, b, out) { return a.add(b, out); }
 
   /**
    * Get the intersection of two lines as a point.
