@@ -589,7 +589,7 @@ export class PointArray {
     const m1 = this.w;
     const m2 = other.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
-    out.w = m1 * m2;
+    out.w = 0;
     return  out;
   }
 

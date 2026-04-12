@@ -39,7 +39,7 @@ export class Plane extends HPoint3d {
   get normal() {
     if ( !this.#normalized ) this.normalize();
     const a = this.arr;
-    return Point3d.newInstances.set(a[0], a[1], a[2], 0);
+    return Point3d.newInstance.set(a[0], a[1], a[2], 0);
   }
 
   /**

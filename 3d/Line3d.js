@@ -48,10 +48,10 @@ export class Line3d {
   static create() {
     const out = new this();
     const pts = Point3d.allocate(2);
-    direction = pts[0];
-    moment = pts[1];
-    direction.w = 0;
-    moment.w = 0;
+    out.direction = pts[0];
+    out.moment = pts[1];
+    out.direction.w = 0;
+    out.moment.w = 0;
     return out;
   }
 
@@ -126,7 +126,7 @@ export class Line3d {
   distanceSquaredFromPoint(pt) {
     // Distance from the point p is the magnitude of the cross product of the point and direction.
     // Must use cartesian point coordinates.
-    pt.perspectiveDivide();
+    pt.perspectiveDivide(); // Change in place b/c perspectiveDivide does not change the point properties.
     using xd = pt.cross(this.direction);
     xd.subtract(this.moment, xd);
     return xd.magnitudeSquared();
@@ -175,7 +175,7 @@ export class Line3d {
     const x0 = l1.direction.dot(l2.moment);
     l1.moment.cross(l2.moment, pt);
     pt.w = x0;
-    return plane;
+    return pt;
   }
 
   /* TODO: Implement this in Triangle3d.
