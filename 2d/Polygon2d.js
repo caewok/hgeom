@@ -141,13 +141,25 @@ export class Polygon2d {
 
   /**
    * Construct a new polygon, copying the coordinates of an array of points.
-   * @param {Point2d[]} pts
+   * @param {Point2d|PIXI.Point[]} pts
    * @returns {Polygon2d}
    */
   static fromPoints(pts) {
     const n = pts.length;
     const poly = this.create(n);
-    for ( let i = 0; i < n; i += 1 ) poly.points[i].copyFrom(pts[i]);
+    for ( let i = 0; i < n; i += 1 ) poly.points[i].copyFrom(pts[i]); // Slower than clone but processes various objects.
+    return poly;
+  }
+
+  /**
+   * Construct a new polygon, copying the coordinates of an array of points.
+   * @param {Point2d[]} pts
+   * @returns {Polygon2d}
+   */
+  static fromPoints2d(pts) {
+    const n = pts.length;
+    const poly = this.create(n);
+    for ( let i = 0; i < n; i += 1 ) pt[i].clone(poly.points[i]);
     return poly;
   }
 
