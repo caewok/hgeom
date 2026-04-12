@@ -102,6 +102,20 @@ export class HPoint2d extends HPointAbstract {
     return out;
   }
 
+  /**
+   * 2d cross product, which indicates orientation.
+   * This version normalizes the vectors.
+   * @param {HPoint2d} a
+   * @param {HPoint2d} b
+   * @param {HPoint2d} c
+   * @returns {number}
+   */
+  static cOrient(a, b, c) {
+    using dxAB = b.subtract(a);
+    using dxAC = c.subtract(a);
+    return -this.constructor.cross2d(dxAB, dxAC);
+  }
+
   /*
   2d cross product indicates orientation of a vector: ax*by - ay*bx
   • C > 0: b is "left", CCW
