@@ -128,6 +128,8 @@ export function runTests(context) {
       expect(result.x).to.equal(10);
       expect(result.y).to.equal(20);
       expect(result.w).to.equal(1);
+      pt.release();
+      translate.release();
     });
   });
 

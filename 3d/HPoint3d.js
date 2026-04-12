@@ -93,6 +93,22 @@ export class HPoint3d extends HPointAbstract {
     return this.constructor.cross([this, b, c], out);
   }
 
+  /**
+   * Cross two 3d vectors by ignoring the w value.
+   */
+  static cross3d(p0, p1, out) {
+    out ||= this.newInstance;
+    out.w = 0;
+    // Avoid overwriting if out point is this or other.
+    const x = this.cross2d(p0, p1, 1, 2);
+    const y = this.cross2d(p0, p1, 2, 0);
+    const z = this.cross2d(p0, p1, 0, 1);
+    out.arr[0] = x;
+    out.arr[1] = y;
+    out.arr[2] = z;
+    return out;
+  }
+
   /*
   Orientation of a point in relation to three points that form a plane.
   • C > 0: Point d is above the plane (right-hand rule for a -> b -> c)
