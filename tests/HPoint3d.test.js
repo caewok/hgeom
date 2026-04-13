@@ -94,16 +94,33 @@ export function runTests(context) {
     });
 
     it("should calculate cross using 4d determinant", () => {
-      const a = HPoint3d.build(0, 0, 0, 2);
-      const b = HPoint3d.build(1, 0, 0, 1);
-      const c = HPoint3d.build(0, 1, 0, 3);
+      // {0, 0, 0, 1}, {1, 0, 0, 1}, {0, 1, 0, 1} = {0, 0, 1, 0}
+      // {0, 0, 0, 2}, {1, 0, 0, 1}, {0, 1, 0, 3} = {0, 0, 2, 0}
+      // {1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12} = {0, 0, 0, 0} (linearly dependent)
+      // {1, 1, 0, 0}, {0, 1, 1, 0}, {0, 0, 1, 1} = {1, -1, 1, -1}
 
-      const res = a.cross(b, c);
-      const expected = HPoint3d.build(0, 0, 2, 0);
+      let a = HPoint3d.build(0, 0, 0, 2);
+      let b = HPoint3d.build(1, 0, 0, 1);
+      let c = HPoint3d.build(0, 1, 0, 3);
+      let res = a.cross(b, c);
+      let expected = HPoint3d.build(0, 0, 2, 0);
       expect(res.equals(expected)).to.be.true;
+
+      a = HPoint3d.build(1, 2, 3, 4);
+      b = HPoint3d.build(5, 6, 7, 8);
+      c = HPoint3d.build(9, 10, 11, 12);
+      res = a.cross(b, c);
+      expected = HPoint3d.build(0, 0, 0, 0);
+      expect(res.equals(expected)).to.be.true;
+
+      a = HPoint3d.build(1, 1, 0, 0);
+      b = HPoint3d.build(0, 1, 1, 0);
+      c = HPoint3d.build(0, 0, 1, 1);
+      res = a.cross(b, c);
+      expected = HPoint3d.build(1, -1, 1, -1);
+      expect(res.equals(expected)).to.be.true;
+
     });
-
-
 
     it("should calculate orientation", () => {
       const a = HPoint3d.build(0, 0, 0, 1);

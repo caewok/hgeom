@@ -66,6 +66,98 @@ export function runTests(context) {
     });
   });
 
+  describe("Matrix row and column manipulation", () => {
+    let matA;
+    beforeEach(() => {
+      matA = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+      ]);
+    });
+
+    it("should remove a row", () => {
+      const expected = Matrix.from2dArray([
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.removeRow(0);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove a row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.removeRow(1);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove a column", () => {
+      const expected = Matrix.from2dArray([
+        [1, 2, 3],
+        [5, 6, 7],
+        [9, 10, 11],
+      ]);
+      const result = matA.removeColumn(0);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove a column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 3],
+        [4, 5, 7],
+        [8, 9, 11],
+      ]);
+      const result = matA.removeColumn(1);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add a row", () => {
+      const expected = Matrix.from2dArray([
+        [12, 13, 14, 15],
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.addRow(0, [12, 13, 14, 15]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add a row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [12, 13, 14, 15],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.addRow(2, [12, 13, 14, 15]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add a column", () => {
+      const expected = Matrix.from2dArray([
+        [12, 0, 1, 2, 3],
+        [13, 4, 5, 6, 7],
+        [14, 8, 9, 10, 11],
+      ]);
+      const result = matA.addColumn(0, [12, 13, 14]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add a column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 12, 2, 3],
+        [4, 5, 13, 6, 7],
+        [8, 9, 14, 10, 11],
+      ]);
+      const result = matA.addColumn(2, [12, 13, 14]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+  })
+
   describe("Multiplication", () => {
     it("should multiply two 2x2 matrices", () => {
       const A = Matrix.from2dArray([[1, 2], [3, 4]]);
