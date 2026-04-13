@@ -3,9 +3,26 @@ HGEOM,
 */
 "use strict";
 
+function orient3dfast(a, b, c, d) {
+    const adx = a.x - d.x;
+    const bdx = b.x - d.x;
+    const cdx = c.x - d.x;
+    const ady = a.y - d.y;
+    const bdy = b.y - d.y;
+    const cdy = c.y - d.y;
+    const adz = a.z - d.z;
+    const bdz = b.z - d.z;
+    const cdz = c.z - d.z;
+
+    return adx * (bdy * cdz - bdz * cdy) +
+        bdx * (cdy * adz - cdz * ady) +
+        cdx * (ady * bdz - adz * bdy);
+}
+
 export function runTests(context) {
   const { describe, it, expect } = context;
   const HPoint3d = HGEOM.HPoint3d;
+  const Matrix = HGEOM.Matrix;
 
   describe("HPointAbstract & Memory Management", () => {
 
@@ -76,7 +93,19 @@ export function runTests(context) {
       expect(pt.arr[0]).to.equal(20);
     });
 
-    it("should calculate orientation (cOrient3d)", () => {
+    it("should calculate cross using 4d determinant", () => {
+      const a = HPoint3d.build(0, 0, 0, 2);
+      const b = HPoint3d.build(1, 0, 0, 1);
+      const c = HPoint3d.build(0, 1, 0, 3);
+
+      const res = a.cross(b, c);
+      const expected = HPoint3d.build(0, 0, 2, 0);
+      expect(res.equals(expected)).to.be.true;
+    });
+
+
+
+    it("should calculate orientation", () => {
       const a = HPoint3d.build(0, 0, 0, 1);
       const b = HPoint3d.build(1, 0, 0, 1);
       const c = HPoint3d.build(0, 1, 0, 1);
@@ -86,16 +115,41 @@ export function runTests(context) {
       const orientation = d.orient(a, b, c);
       expect(orientation).to.not.equal(0);
     });
+
+    it("should calculate orientation using 4d determinant", () => {
+      // https://web.math.utk.edu/~jdydak/JDNanoGPT/bbbb4DVectorCalc.html
+
+      const a = HPoint3d.build(0, 0, 0, 1);
+      const b = HPoint3d.build(1, 0, 0, 1);
+      const c = HPoint3d.build(0, 1, 0, 1);
+      const d = HPoint3d.build(0, 0, 1, 1);
+
+      // Testing a point (d) relative to the plane formed by a, b, c
+      const orientation = d.orientWithDet(a, b, c);
+      expect(orientation).to.be.greaterThan(0);
+    });
+
+    it("should make orientation positive for CCW points on plane", () => {
+      const a = HPoint3d.build(0, 0, 0, 1);
+      const b = HPoint3d.build(1, 0, 0, 1);
+      const c = HPoint3d.build(0, -1, 0, 1);
+      const d = HPoint3d.build(0, 0, 1, 1);
+
+      const orientation = d.orient(a, b, c);
+      expect(orientation).to.be.greaterThan(0);
+    });
   });
 
   describe("Transform", () => {
     it("should translate a point correctly", () => {
-      const translate = Matrix.translation(10, 20, 30);
-      const pt = new HPoint3d(0, 0, 0);
+      const translate = Matrix.translation({ x: 10, y: 20, z: 30 });
+      const pt = HPoint3d.build(0, 0, 0);
       const result = pt.transform(translate);
       expect(result.x).to.equal(10);
       expect(result.y).to.equal(20);
       expect(result.z).to.equal(30);
+      pt.release();
+      translate.release();
     });
   });
 

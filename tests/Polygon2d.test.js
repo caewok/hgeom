@@ -42,10 +42,10 @@ export function runTests(context) {
       let square;
       before(() => {
         const pts = [
-          new Point2d(0, 0),
-          new Point2d(100, 0),
-          new Point2d(100, 100),
-          new Point2d(0, 100)
+          Point2d.build(0, 0),
+          Point2d.build(100, 0),
+          Point2d.build(100, 100),
+          Point2d.build(0, 100)
         ];
         square = Polygon2d.fromPoints(pts);
       });
@@ -77,8 +77,8 @@ export function runTests(context) {
 
     describe("Segment2d Logic", () => {
       it("should detect intersecting segments", () => {
-        const s1 = Segment2d.fromPoints([new Point2d(0, 0), new Point2d(10, 10)]);
-        const s2 = Segment2d.fromPoints([new Point2d(0, 10), new Point2d(10, 0)]);
+        const s1 = Segment2d.fromPoints([Point2d.build(0, 0), Point2d.build(10, 10)]);
+        const s2 = Segment2d.fromPoints([Point2d.build(0, 10), Point2d.build(10, 0)]);
 
         expect(Segment2d.segmentsIntersect(s1, s2)).to.be.true;
 
@@ -87,8 +87,8 @@ export function runTests(context) {
       });
 
       it("should return null for parallel segments", () => {
-        const s1 = Segment2d.fromPoints([new Point2d(0, 0), new Point2d(0, 10)]);
-        const s2 = Segment2d.fromPoints([new Point2d(5, 0), new Point2d(5, 10)]);
+        const s1 = Segment2d.fromPoints([Point2d.build(0, 0), Point2d.build(0, 10)]);
+        const s2 = Segment2d.fromPoints([Point2d.build(5, 0), Point2d.build(5, 10)]);
 
         const ix = Segment2d.segmentIntersection(s1, s2);
         expect(ix).to.be.null;
@@ -98,9 +98,9 @@ export function runTests(context) {
       });
 
       it("should correctly identify points on a segment", () => {
-        const seg = Segment2d.fromPoints([new Point2d(0, 0), new Point2d(10, 0)]);
-        const pMid = new Point2d(5, 0);
-        const pOut = new Point2d(15, 0);
+        const seg = Segment2d.fromPoints([Point2d.build(0, 0), Point2d.build(10, 0)]);
+        const pMid = Point2d.build(5, 0);
+        const pOut = Point2d.build(15, 0);
 
         expect(seg.isPointOnSegment(pMid)).to.be.true;
         expect(seg.isPointOnSegment(pOut)).to.be.false;
@@ -113,7 +113,7 @@ export function runTests(context) {
 
     describe("AABB Management", () => {
       it("should lazily calculate and cache the AABB", () => {
-        const poly = Polygon2d.fromPoints([new Point2d(10, 10), new Point2d(20, 20)]);
+        const poly = Polygon2d.fromPoints([Point2d.build(10, 10), Point2d.build(20, 20)]);
         expect(poly.dirtyAABB).to.be.true;
 
         const box = poly.aabb;

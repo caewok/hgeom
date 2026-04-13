@@ -121,7 +121,7 @@ export function runTests(context) {
 
   describe("Foundry Integration & Pooling", () => {
     it("should share buffers when using fromHPoint", () => {
-      const pt = new HPoint3d(1, 2, 3);
+      const pt = HPoint3d.build(1, 2, 3);
       const mat = Matrix.fromHPoint(pt);
 
       expect(mat.getIndex(0, 0)).to.equal(1);

@@ -102,7 +102,7 @@ class MatrixAbstract {
     out ||= this.constructor.create(nrow -1, this.ncol);
     for ( let i = 0; i < nrow; i += 1 ){
       if ( i === row ) continue;
-      out.setRow([...this.iterateRow(i)]);
+      out.setRow(i, [...this.iterateRow(i)]);
     }
     return out;
   }
@@ -118,7 +118,7 @@ class MatrixAbstract {
     out ||= this.constructor.create(this.nrow, ncol -1);
     for ( let i = 0; i < ncol; i += 1 ){
       if ( i === col ) continue;
-      out.setColumn([...this.iterateColumn(i)]);
+      out.setColumn(i, [...this.iterateColumn(i)]);
     }
     return out;
   }

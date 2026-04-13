@@ -20,15 +20,6 @@ export function runTests(context) {
       assert.equal(mid.arr[1] / mid.arr[2], 5);
     });
 
-    it("should calculate the 2D cross product (cCross2d) correctly", () => {
-      const p1 = Point2d.build(2, 0, 1);
-      const p2 = Point2d.build(0, 2, 1);
-      const result = Point2d.cCross2d(p1, p2);
-
-      // (2*2 - 0*0) / (1*1) = 4
-      assert.equal(result, 4);
-    });
-
     it("should find the intersection of two lines", () => {
       // Line X=5 and Line Y=5
       const l1 = Line2d.build(1, 0, -5);

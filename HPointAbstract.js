@@ -645,6 +645,45 @@ export class PointArray {
     return out;
   }
 
+  // ----- NOTE: Equality ----- //
+
+  /**
+   * Is this point exactly equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {PointArray} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    const a = this.arr;
+    const b = other.arr;
+    if ( a.length !== b.length ) return false;
+
+    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) {
+      if ( a[i] !== b[i] ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Is this point almost equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {PointArray} other
+   * @param {number} [epsilon]
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    const a = this.arr;
+    const b = other.arr;
+     if ( a.length !== b.length ) return false;
+
+    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) {
+      if ( !a[i].almostEqual(b[i], epsilon) ) return false;
+    }
+    return true;
+  }
+
   // ----- NOTE: Matrix transform ----- //
 
   /**
@@ -776,7 +815,7 @@ export class PointArray {
   // ----- NOTE: Static Cross ----- //
 
   /**
-   * X dimensional cross, or "perpendicular":
+   * Generalized X dimensional cross, or "perpendicular":
    * https://math.stackexchange.com/questions/2371022/cross-product-in-higher-dimensions
    * Uses determinants.
    * @param {PointArrayAbstract} p1
@@ -816,26 +855,38 @@ export class PointArray {
     return this._cross(vectors, out);
   }
 
-  static _cross(vectors = [], out) {
+  /**
+   * Generalized X dimensional cross.
+   * @param {PointArrayAbstract[]} points
+   * @param {PointArrayAbstract} [out]
+   * @returns {PointArrayAbstract}
+   */
+  static _cross(points = [], out) {
     // Use determinants for higher dimensions.
     // E.g, for 4 dimensions, need 4 determinants from 3 vectors:
     // {t1,..., t4}, {u1, ..., u4}, {v1, ..., v4}
     // a1 = |2, 3, 4|, a2 = |1, 3, 4|, a3 = |1, 2, 4|, a4 = |1, 2, 3|
 
-    const p0 = vectors[0];
+    const p0 = points[0];
     const nDims = p0.DIMS;
     const fullDims = nDims + 1;
-    using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
-    for ( let i = 0; i < nDims; i += 1 ) mat.setColumn(i, vectors[i].arr);
 
-    // Get the 3x3 determinant of each combination of the 3x4 matrix.
+    // Create the minor matrix (n-1 rows, n columns)
+    using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
+    for ( let i = 0; i < nDims; i += 1 ) mat.setRow(i, points[i].arr);
+
+    // Use Cramer's rule-style minors.
     using matDet = HGEOM.Matrix.create(nDims, nDims); // E.g., 3x3
+    let sign = 1;
     for ( let colToOmit = 0; colToOmit < fullDims; colToOmit += 1 ) {
       mat.dropColumn(colToOmit, matDet);
-      out.arr[colToOmit] = matDet.determinant();
-      if ( isOddFast(colToOmit) ) out.arr[colToOmit] *= -1;
+      const val = matDet.determinant();
+
+      // Apply alternating sign. +,-,+,-. Depending on handedness, this may be reversed.
+      out.arr[colToOmit] = val * sign;
+      sign *= -1;
     }
-    return out;
+    return out; // Dual representation. Cross product of n-1 points in n-space results in hyperplane, not localized coordinate.
   }
 
   /**

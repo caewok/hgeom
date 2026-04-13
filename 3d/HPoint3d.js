@@ -109,6 +109,11 @@ export class HPoint3d extends HPointAbstract {
     return out;
   }
 
+  static scalarTripleVectors(a, b, c) {
+    using xBC = this.crossVectors(b, c);
+    return a.dot(xBC);
+  }
+
   /*
   Orientation of a point in relation to three points that form a plane.
   • C > 0: Point d is above the plane (right-hand rule for a -> b -> c)
@@ -122,14 +127,35 @@ export class HPoint3d extends HPointAbstract {
   */
   orient(a, b, c) {
     // Y is reversed so must negate.
-    if ( this.isVector ) return -this.constructor.scalarTriple(a, b, this);
+    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
 
     // Could create a plane:
     // Plane.fromPoints(a, b, c).orient(this).
     // For performance, calculate directly using the scalar triple.
     // Could also take the determinate of the 4 x 4 matrix
+    using vA = a.subtract(this);
+    using vB = b.subtract(this);
+    using vC = c.subtract(this);
+    return this.constructor.scalarTripleVectors(vA, vB, vC);
+
+    /* To get the determinant:
     using xABC = a.cross(b, c);
     return -xABC.dot(this);
+    */
+  }
+
+  /**
+   * Orient using the determinant for testing.
+   */
+  orientWithDet(a, b, c) {
+    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
+
+    if ( !a.isNormalizedEuclidean ) a.normalizeEuclidean();
+    if ( !b.isNormalizedEuclidean ) b.isNormalizeEuclidean();
+    if ( !c.isNormalizedEuclidean ) c.isNormalizeEuclidean();
+    if ( !this.isNormalizedEuclidean ) this.isNormalizeEuclidean();
+    using xABC = a.cross(b, c);
+    return xABC.dot(this);
   }
 
 
