@@ -73,7 +73,7 @@ export class PointArray {
    * @param {...number} args
    * @returns {HPointArray}
    */
-  static build(...args) { return this.create(args.length).set(...args); }
+  static build(...args) { return this.create(args.length - 1).set(...args); }
 
   /**
    * Create a new point that contains the same values as this one.
@@ -870,6 +870,7 @@ export class PointArray {
     const p0 = points[0];
     const nDims = p0.DIMS;
     const fullDims = nDims + 1;
+    out ||= this.create(nDims);
 
     // Create the minor matrix (n-1 rows, n columns)
     using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
