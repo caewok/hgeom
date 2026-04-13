@@ -102,19 +102,7 @@ export class HPoint2d extends HPointAbstract {
     return out;
   }
 
-  /**
-   * 2d cross product, which indicates orientation.
-   * This version normalizes the vectors.
-   * @param {HPoint2d} a
-   * @param {HPoint2d} b
-   * @param {HPoint2d} c
-   * @returns {number}
-   */
-  static cOrient(a, b, c) {
-    using dxAB = b.subtract(a);
-    using dxAC = c.subtract(a);
-    return -this.constructor.cross2d(dxAB, dxAC);
-  }
+
 
   /*
   2d cross product indicates orientation of a vector: ax*by - ay*bx
@@ -127,6 +115,13 @@ export class HPoint2d extends HPointAbstract {
   • D = 0: vectors are perpendicular
   angle between is cos-1(a•b / |a|•|b|) where || is magnitude
   */
+
+  /**
+   * Orientation of this point/vector with regard to two points or a vector
+   * @param {HPoint2d} a
+   * @param {HPoint2d} [b]        Used only if this is a point
+   * @returns {number}
+   */
   orient(a, b) {
     // Y is reversed, so must negate the orientation.
     if ( this.isVector ) return -this.constructor.cross2d(this, a);
@@ -135,6 +130,20 @@ export class HPoint2d extends HPointAbstract {
     // Line2d.fromPoints(a, b).orient(this).
     // For performance, calculate directly using the scalar triple.
     return -this.constructor.scalarTriple(a, b, this);
+  }
+
+  /**
+   * 2d cross product, which indicates orientation.
+   * Cartesian version.
+   * @param {HPoint2d} a
+   * @param {HPoint2d} b
+   * @param {HPoint2d} c
+   * @returns {number}
+   */
+  static cOrient(a, b, c) {
+    using dxAB = b.subtract(a);
+    using dxAC = c.subtract(a);
+    return -this.cross2d(dxAB, dxAC);
   }
 
   /**

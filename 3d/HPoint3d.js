@@ -83,20 +83,20 @@ export class HPoint3d extends HPointAbstract {
 
   /**
    * Generalized cross product of this point with two other 3d homogeous points.
+   * @param {HPoint3d} a
    * @param {HPoint3d} b
-   * @param {HPoint3d} c
    * @param {HPoint3d} [out]
    * @returns {HPoint3d}
    */
-  cross(b, c, out) {
+  cross(a, b, out) {
     out ||= this.constructor.newInstance;
-    return this.constructor.cross([this, b, c], out);
+    return this.constructor._cross([a, b, this], out);
   }
 
   /**
    * Cross two 3d vectors by ignoring the w value.
    */
-  static cross3d(p0, p1, out) {
+  static crossVectors(p0, p1, out) {
     out ||= this.newInstance;
     out.w = 0;
     // Avoid overwriting if out point is this or other.
