@@ -128,9 +128,20 @@ class MatrixAbstract {
   dropColumn(col = 0, out) {
     const { nrow, ncol } = this;
     out ||= this.constructor.create(nrow, ncol - 1);
-    for ( let i = 0, j = 0; i < ncol; i += 1 ){
-      if ( i === col ) continue;
-      out.setColumn(j++, [...this.iterateColumn(i)]);
+    
+    // For speed, set as much data linearly as possible; don't use setColumn method repeatedly.
+    // Process each row in turn.
+    const a = this.arr;
+    const b = out.arr;
+    for ( let r = 0; r < nrow; r += 1 ) {
+      const aColIdx = this._idx(r, col);
+      const bColIdx = out._idx(r, col);
+        
+      // Set everything for this row before the dropped column.
+      if ( col > 0 ) b.set(a.slice(aColIdx - col, aColIdx), bColIdx - col);
+      
+      // Set everything for this row after the dropped column.
+      if ( col < ncol ) b.set(a.slice(aColIdx + 1, aColIdx + ncol - col), bColIdx);
     }
     return out;
   }
@@ -147,22 +158,18 @@ class MatrixAbstract {
     out ||= this.constructor.create(nrow + 1, ncol);
     const a = this.arr;
     const b = out.arr;
+    const aRowIdx = this._idx(row, 0)
     
     // Set everything before the row to add.
-    if ( row > 0 ) {
-      const idx = this._idx(row, 0); // Slice does not include the last index, so add 1 to include row - 1, col - 1.
-      b.set(a.slice(0, idx), 0);
-    }
+    if ( row > 0 ) b.set(a.slice(0, aRowIdx), 0);
     
     // Add the row data.
-    const idx = this._idx(row, 0);
-    b.set(data, idx);
+    b.set(data, aRowIdx);
     
     // Set everything after the row to add, bumping each row down one.
     if ( row < nrow ) {
-      const idx = this._idx(row, 0);
       const newIdx = out._idx(row + 1, 0);
-      b.set(a.slice(idx), newIdx);
+      b.set(a.slice(aRowIdx), newIdx);
     }
     return out;
   }
@@ -177,12 +184,26 @@ class MatrixAbstract {
   addColumn(col, data = [], out) {
     const { nrow, ncol } = this;
     out ||= this.constructor.create(nrow, ncol + 1);
-    for ( let i = 0, j = 0, n = ncol + 1; j < n; j += 1 ) {
-      const newData = j === col ? data : [...this.iterateColumn(i++)];
-      out.setColumn(j, newData);
+    
+    // For speed, set as much data linearly as possible; don't use setColumn method repeatedly.
+    // Process each row in turn.
+    const a = this.arr;
+    const b = out.arr;
+    for ( let r = 0; r < nrow; r += 1 ) {
+      // Set everything for this row before the new column.
+      const aColIdx = this._idx(r, col);
+      const bColIdx = out._idx(r, col);
+      
+      // Add in the new data.
+      if ( col > 0 ) b.set(a.slice(aColIdx - col, aColIdx), bColIdx - col, bColIdx);
+      
+      // Add the column data for this row.
+      b[bColIdx] = data[r];
+            
+      // Set everything for this row after the new column.
+      if ( col < ncol ) b.set(a.slice(aColIdx, aColIdx - col + ncol), bColIdx + 1);
     }
     return out;
-    
   }
 
   // ----- NOTE: Iterators ----- //
