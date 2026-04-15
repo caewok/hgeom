@@ -76,45 +76,64 @@ export function runTests(context) {
       ]);
     });
 
-    it("should remove a row", () => {
+    it("should remove the first row row", () => {
       const expected = Matrix.from2dArray([
         [4, 5, 6, 7],
         [8, 9, 10, 11],
       ]);
-      const result = matA.removeRow(0);
+      const result = matA.dropRow(0);
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should remove a row", () => {
+    it("should remove a middle row", () => {
       const expected = Matrix.from2dArray([
         [0, 1, 2, 3],
         [8, 9, 10, 11],
       ]);
-      const result = matA.removeRow(1);
+      const result = matA.dropRow(1);
+      expect(result.equals(expected)).to.be.true;
+    });
+    
+    it("should remove the last row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+      ]);
+      const result = matA.dropRow(2);
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should remove a column", () => {
+    it("should remove the first column", () => {
       const expected = Matrix.from2dArray([
         [1, 2, 3],
         [5, 6, 7],
         [9, 10, 11],
       ]);
-      const result = matA.removeColumn(0);
+      const result = matA.dropColumn(0);
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should remove a column", () => {
+    it("should remove a middle column", () => {
       const expected = Matrix.from2dArray([
         [0, 1, 3],
         [4, 5, 7],
         [8, 9, 11],
       ]);
-      const result = matA.removeColumn(1);
+      const result = matA.dropColumn(2);
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should add a row", () => {
+    it("should remove the last column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2],
+        [4, 5, 6],
+        [8, 9, 10],
+      ]);
+      const result = matA.dropColumn(3);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add the first row", () => {
       const expected = Matrix.from2dArray([
         [12, 13, 14, 15],
         [0, 1, 2, 3],
@@ -125,7 +144,7 @@ export function runTests(context) {
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should add a row", () => {
+    it("should add a middle row", () => {
       const expected = Matrix.from2dArray([
         [0, 1, 2, 3],
         [4, 5, 6, 7],
@@ -136,7 +155,18 @@ export function runTests(context) {
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should add a column", () => {
+    it("should add the last row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+        [12, 13, 14, 15],
+      ]);
+      const result = matA.addRow(3, [12, 13, 14, 15]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add the first column", () => {
       const expected = Matrix.from2dArray([
         [12, 0, 1, 2, 3],
         [13, 4, 5, 6, 7],
@@ -146,13 +176,23 @@ export function runTests(context) {
       expect(result.equals(expected)).to.be.true;
     });
 
-    it("should add a column", () => {
+    it("should add a middle column", () => {
       const expected = Matrix.from2dArray([
         [0, 1, 12, 2, 3],
         [4, 5, 13, 6, 7],
         [8, 9, 14, 10, 11],
       ]);
       const result = matA.addColumn(2, [12, 13, 14]);
+      expect(result.equals(expected)).to.be.true;
+    });
+    
+    it("should add the last column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3, 12],
+        [4, 5, 6, 7, 13],
+        [8, 9, 10, 11, 14],
+      ]);
+      const result = matA.addColumn(4, [12, 13, 14]);
       expect(result.equals(expected)).to.be.true;
     });
 

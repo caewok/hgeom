@@ -98,12 +98,24 @@ class MatrixAbstract {
    * @returns {Matrix} New matrix
    */
   dropRow(row = 0, out) {
-    const nrow = this.nrow;
-    out ||= this.constructor.create(nrow -1, this.ncol);
-    for ( let i = 0; i < nrow; i += 1 ){
-      if ( i === row ) continue;
-      out.setRow(i, [...this.iterateRow(i)]);
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow - 1, ncol);
+    const a = this.arr;
+    const b = out.arr;
+    
+    // Set everything before the row to omit.
+    if ( row > 0 ) {
+      const idx = this._idx(row, 0); // Slice does not include the last index, so add 1 to include row - 1, col - 1.
+      b.set(a.slice(0, idx), 0);
     }
+    
+    // Set everything after the row to omit.
+    if ( row < (nrow - 1) ) {
+      const idx = this._idx(row + 1, 0);
+      const newIdx = out._idx(row, 0);
+      b.set(a.slice(idx), newIdx);
+    }
+    
     return out;
   }
 
@@ -114,16 +126,64 @@ class MatrixAbstract {
    * @returns {Matrix} New matrix
    */
   dropColumn(col = 0, out) {
-    const ncol = this.ncol;
-    out ||= this.constructor.create(this.nrow, ncol -1);
-    for ( let i = 0; i < ncol; i += 1 ){
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow, ncol - 1);
+    for ( let i = 0, j = 0; i < ncol; i += 1 ){
       if ( i === col ) continue;
-      out.setColumn(i, [...this.iterateColumn(i)]);
+      out.setColumn(j++, [...this.iterateColumn(i)]);
     }
     return out;
   }
 
+  /**
+   * Return a new matrix that adds a specific row to this matrix.
+   * @param {TypedArray|number[]}		Row data to add
+   * @param {number} row            Row number to insert. 0 will insert first, 1 after row 0, ...
+   * @param {Matrix} out            Out matrix
+   * @returns {Matrix} New matrix
+   */
+  addRow(row, data = [], out) {
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow + 1, ncol);
+    const a = this.arr;
+    const b = out.arr;
+    
+    // Set everything before the row to add.
+    if ( row > 0 ) {
+      const idx = this._idx(row, 0); // Slice does not include the last index, so add 1 to include row - 1, col - 1.
+      b.set(a.slice(0, idx), 0);
+    }
+    
+    // Add the row data.
+    const idx = this._idx(row, 0);
+    b.set(data, idx);
+    
+    // Set everything after the row to add, bumping each row down one.
+    if ( row < nrow ) {
+      const idx = this._idx(row, 0);
+      const newIdx = out._idx(row + 1, 0);
+      b.set(a.slice(idx), newIdx);
+    }
+    return out;
+  }
 
+  /**
+   * Return a new matrix that adds a specific column to this matrix.
+   * @param {TypedArray|number[]}		Column data to add
+   * @param {number} col            Column number to insert
+   * @param {Matrix} out            Out matrix
+   * @returns {Matrix} New matrix
+   */
+  addColumn(col, data = [], out) {
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow, ncol + 1);
+    for ( let i = 0, j = 0, n = ncol + 1; j < n; j += 1 ) {
+      const newData = j === col ? data : [...this.iterateColumn(i++)];
+      out.setColumn(j, newData);
+    }
+    return out;
+    
+  }
 
   // ----- NOTE: Iterators ----- //
 
@@ -419,6 +479,40 @@ class MatrixAbstract {
     out._setElements((elem, i) => this.arr[i]);
     return out;
   }
+  
+  // ----- NOTE: Equality ----- //
+  
+  /**
+   * Does this matrix equal another?
+   * @param {Matrix} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if ( !(this.nrow === other.nrow && this.ncol === other.ncol) ) return false;
+    const a = this.arr;
+    const b = other.arr;
+    for ( let i = 0, n = this.arr.length; i < n; i += 1 ) {
+      if ( a[i] !== b[i] ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Does this matrix almost equal another?
+   * @param {Matrix} other
+   * @param {number} epsilon
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    if ( !(this.nrow === other.nrow && this.ncol === other.ncol) ) return false;
+    const a = this.arr;
+    const b = other.arr;
+    for ( let i = 0, n = this.arr.length; i < n; i += 1 ) {
+      if ( !a[i].almostEqual(b[i], epsilon) ) return false;
+    }
+    return true;
+  }  
+  
 
   // ----- NOTE: Transformation ----- //
 
