@@ -53,7 +53,7 @@ function between(a, b, inclusive=true) {
  * @param {number} [e=1e-08]      Epsilon
  * @returns {boolean}
  */
-export function almostBetween(a, b, epsilon = 1e-06) {
+function almostBetween(a, b, epsilon = 1e-06) {
   const min = Math.min(a, b);
   const max = Math.max(a, b);
   return this.almostLessThan(max, epsilon) && this.almostGreaterThan(min, epsilon);
@@ -64,3 +64,19 @@ if ( !Object.hasOwn(Number.prototype, "almostLessThan") ) Number.prototype.almos
 if ( !Object.hasOwn(Number.prototype, "almostGreaterThan") ) Number.prototype.almostGreaterThan = almostGreaterThan;
 if ( !Object.hasOwn(Number.prototype, "between") ) Number.prototype.between = between;
 if ( !Object.hasOwn(Number.prototype, "almostBetween") ) Number.prototype.almostBetween = almostBetween;
+
+// ----- NOTE: PIXI helpers ----- //
+
+/**
+ * Iterate over the PIXI polygon's {x, y} points in order.
+ * @returns {PIXI.Point} Each point returned is distinct.
+ */
+function* iteratePoints() {
+  const ln = this.points.length;
+  if ( ln < 2 ) return;
+  for (let i = 0; i < ln; i += 2) yield new PIXI.Point(this.points[i], this.points[i + 1]);
+}
+
+if ( Object.hasOwn(globalThis, "PIXI") ) {
+  if ( !Object.hasOwn(PIXI.Polygon.prototype, "iteratePoints") ) PIXI.Polygon.iteratePoints = iteratePoints;
+}

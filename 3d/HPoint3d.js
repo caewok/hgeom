@@ -149,11 +149,11 @@ export class HPoint3d extends HPointAbstract {
    */
   orientWithDet(a, b, c) {
     if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
-
-    if ( !a.isNormalizedEuclidean ) a.normalizeEuclidean();
-    if ( !b.isNormalizedEuclidean ) b.isNormalizeEuclidean();
-    if ( !c.isNormalizedEuclidean ) c.isNormalizeEuclidean();
-    if ( !this.isNormalizedEuclidean ) this.isNormalizeEuclidean();
+    
+    a.euclideanNormalization();
+    b.euclideanNormalization();
+    c.euclideanNormalization();
+    this.euclideanNormalization();
     using xABC = a.cross(b, c);
     return xABC.dot(this);
   }

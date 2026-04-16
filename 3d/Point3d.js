@@ -58,12 +58,12 @@ export class Plane extends HPoint3d {
   get normalized() { return this.#normalized; }
 
   get normal() {
-    if ( !this.isNormalizedEuclidean ) this.normalizeEuclidean(this);
+    this.euclideanNormalization(this);
     return Point3d.build(this.a, this.b, this.c, 0);
   }
 
   get distanceFromOrigin() {
-    if ( !this.isNormalizedEuclidean ) this.normalizeEuclidean(this);
+    this.euclideanNormalization(this);
     return -this.d;
   }
 

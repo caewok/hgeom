@@ -19,18 +19,32 @@ export class AABB {
   static pointClass = PointArray;
 
   /** @type {Point2d} */
-  min;
+  _min;
 
   /** @type {Point2d} */
-  max;
+  _max;
+  
+  get min() { return this._min; }
+  
+  get max() { return this._max; }
+  
+  set min(value) {
+    this._min.copyFrom(value);
+    this._min.euclideanNormalization();
+  }
+
+  set max(value) {
+    this._max.copyFrom(value);
+    this._max.euclideanNormalization();
+  }
 
   [Symbol.dispose]() { this.release(); }
 
   release() {
-    this.min.release();
-    this.max.release();
-    this.min = null;
-    this.max = null;
+    this._min.release();
+    this._max.release();
+    this._min = null;
+    this._max = null;
   }
 
   /**
@@ -41,29 +55,40 @@ export class AABB {
   clone(out) {
     if ( out === this ) return out;
     out ||= this.constructor.newInstance;
-    out.min.copyFrom(this.min);
-    out.max.copyFrom(this.max);
+    out._min.copyFrom(this._min);
+    out._max.copyFrom(this._max);
     return out;
   }
 
   /**
-   *  Set min/max to negative and positive infinity, respectively.
+   * Set min/max to positive and negative infinity, respectively.
+   * Creates a null bounding box that can easily be modified by comparing to actual values.
+   * @returns {AABB}
    */
   _clear() {
     const { min, max } = this;
     for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
-      min.arr[i] = Number.NEGATIVE_INFINITY;
-      max.arr[i] = Number.POSITIVE_INFINITY;
+      min.arr[i] = Number.POSITIVE_INFINITY;
+      max.arr[i] = Number.NEGATIVE_INFINITY;
     }
     min.w = 1;
     max.w = 1;
     return this;
   }
+  
+  /**
+   * Normalize min and max as necessary.
+   * Done in place.
+   */
+  _normalize() {
+    this._min.euclideanNormalization();
+    this._max.euclideanNormalization();
+  }
 
   // ----- NOTE: Factory methods ----- //
 
   /** @type {AABB} */
-  get newInstance() { return this.create(); }
+  static get newInstance() { return this.create(); }
 
   /**
    * Create a new bounding box.
@@ -74,8 +99,8 @@ export class AABB {
   static create() {
     const aabb = new this();
     const pts = this.pointClass.allocateNObjects(2);
-    aabb.min = pts[0];
-    aabb.max = pts[1];
+    aabb._min = pts[0];
+    aabb._max = pts[1];
     aabb._clear();
     return aabb;
   }
@@ -116,6 +141,7 @@ export class AABB {
         max.arr[i] = Math.max(pt.arr[i], max.arr[i]);
       }
     }
+    this._normalize();
     return out;
   }
 
@@ -129,7 +155,7 @@ export class AABB {
   makeFinite(out) {
     out = this.clone(out);
     const { min, max } = out;
-    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
       if ( !Number.isFinite(max.arr[i]) ) max.arr[i] = Number.MAX_SAFE_INTEGER;
       if ( !Number.isFinite(min.arr[i]) ) min.arr[i] = Number.MIN_SAFE_INTEGER;
     }
@@ -143,16 +169,17 @@ export class AABB {
   /**
    * Does this bounding box contain the point?
    * @param {PointArray} p
-   * @param {number} [epsilon=1e-06]        How close to min/max for the point to count as contained
+   * @param {number} [epsilon]        How close to min/max for the point to count as contained
    * @returns {AABB}
    */
-  containsPoint(p, axes, epsilon = 1e-06) {
+  containsPoint(p, axes, epsilon) {
     axes ??= this.constructor.axes;
     const { min, max } = this;
-    const pA = p.arr;
-    const w = p.arr.w;
+    
+    // AABB min/max is already normalized using setter.
+    p.euclideanNormalization();
     for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
-      if ( (pA[i] / w).almostBetween(min.arr[i], max.arr[i], epsilon) ) return false;
+      if ( !p.arr[i].almostBetween(min.arr[i], max.arr[i], epsilon) ) return false;
     }
     return true;
   }
@@ -165,7 +192,7 @@ export class AABB {
   overlapsAABB(other) {
     // Separating Axis Theorem: Must overlap on every axis.
     // A.minX <= B.maxX && A.maxX >= B.minX && ...same for y, z
-    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
        // If not overlapping on an axis, return false.
       if ( this.min.arr[i].almostEqual(other.min.arr[i]) ) continue;
       if ( this.max.arr[i] < other.min.arr[i] || other.max.arr[i] < this.min.arr[i] ) return false;
@@ -187,11 +214,10 @@ export class AABB {
     let tmin = -Infinity;
     let tmax = Infinity;
     const { a, b } = segment;
-    if ( a.w !== 1 ) a.perspectiveDivide(a);
-    if ( b.w !== 1 ) b.perspectiveDivide(b);
-    using rayDirection = b.subtract(a);
+    a.euclideanNormalization(); // Set to p0 below, so must be normalized. 
+    using rayDirection = b.subtract(a); // Vector, so not normalized (handled in subtract).
 
-    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+    for ( let i = 0, n = this.constructor.DIMS; i < n; i += 1 ) {
       const min = this.min.arr[i];
       const max = this.max.arr[i]
       const p0 = a.arr[i];

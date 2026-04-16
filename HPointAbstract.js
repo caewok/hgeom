@@ -751,7 +751,33 @@ export class PointArray {
     out.multiplyScalar(1/out.w);
     return out;
   }
-
+  
+	/**
+	 * Euclidean normalization. Point w set to 1.
+	 * Perspective divides the point in place. 
+	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+	 * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
+	 * @returns {HPointArray} out
+	 */
+	euclideanNormalization() {
+	  if ( !(this.isVector || this.isNormalizedEuclidean) ) this.perspectiveDivide(this);
+	  return this;
+	}
+	
+	/**
+	 * Spherical normalization. Point or vector normalized to 1.
+	 * Done in place.
+	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+	 * Resulting vectors lie on a sphere.
+	 * Points xs and -xs represent the same 2d point. Can be used in oriented projective geometry
+	 * to distinguish between lines with different orientation.
+	 * @returns {HPointArray} out
+	 */
+	sphericalNormalization() {
+	  if ( !this.isNormalizedSpherical ) this.normalize(this);
+	  return this;
+	}
+	
   /**
    * Dot product of this point with another.
    * @param {HPointArray} other
@@ -1046,25 +1072,7 @@ export class HPointAbstract extends mix(PointArray).with(PoolableMixin) {
 }
 
 // ----- NOTE: Aliases ----- //
-/**
- * Euclidean normalization. Vector w set to 1.
- * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
- * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
- * @param {HPointAbstract} out
- * @returns {HPointArray} out
- */
-PointArray.prototype.euclideanNormalization = PointArray.prototype.perspectiveDivide;
 
-/**
- * Spherical normalization. Vector normalized to 1.
- * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
- * Resulting vectors lie on a sphere.
- * Points xs and -xs represent the same 2d point. Can be used in oriented projective geometry
- * to distinguish between lines with different orientation.
- * @param {HPointAbstract} out
- * @returns {HPointArray} out
- */
-PointArray.prototype.sphericalNormalization = PointArray.prototype.normalize;
 
 
 function isOddFast(n) { return (n & 1) === 1; }

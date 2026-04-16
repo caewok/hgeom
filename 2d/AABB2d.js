@@ -32,7 +32,6 @@ export class AABB2d extends AABB {
    */
   static fromPIXIPoints(pts = [], out) {
     out ||= this.newInstance;
-    out._clear();
     const { min, max } = out;
     for ( const pt of pts ) {
       for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
@@ -90,14 +89,15 @@ export class AABB2d extends AABB {
   static fromPIXIPolygon(poly, out) {
     // Iterating the points will determine the min/max values.
     out ||= this.newInstance;
-    out._clear();
     const { min, max } = out;
-    for ( const pt of poly.iteratePoints() ) {
-      min._x = Math.min(pt.x, min._x);
-      min._y = Math.min(pt.y, min._y);
+    for ( let i = 0, n = poly.points.length; i < n; ) {
+      const x = poly.points[i++];
+      const y = poly.points[i++];    
+      min._x = Math.min(x, min._x);
+      min._y = Math.min(y, min._y);
 
-      max._x = Math.max(pt.x, max._x);
-      max._y = Math.max(pt.y, max._y);
+      max._x = Math.max(x, max._x);
+      max._y = Math.max(y, max._y);
     }
     return out;
   }
@@ -112,7 +112,6 @@ export class AABB2d extends AABB {
   static fromPolygon2d(poly, out) {
     // Iterating the points will determine the min/max values.
     out ||= this.newInstance;
-    out._clear();
     const { min, max } = out;
     for ( const pt of poly.iteratePoints() ) {
       if ( pt.w !== 1 ) pt.perspectiveDivide(pt);
@@ -190,7 +189,8 @@ export class AABB2d extends AABB {
    * @param {number} y;
    */
   contains(x, y) {
-    return this.containsPoint({ x, y });
+    using pt = Point2d.build(x, y);
+    return this.containsPoint(pt);
   }
 }
 

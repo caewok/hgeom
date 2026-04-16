@@ -70,12 +70,12 @@ export class Line2d extends HPoint2d {
 
   // NOTE: Line must be normalized first using euclideanNormalization.
   get normal() {
-    if ( !this.isNormalizedEuclidean ) this.normalizeEuclidean(this);
+    this.euclideanNormalization();
     return Point2d.build(this.a, this.b, 0);
   }
 
   get distanceFromOrigin() {
-    if ( !this.isNormalizedEuclidean ) this.normalizeEuclidean(this);
+    this.euclideanNormalization();
     return -this.c;
   }
 
