@@ -6,6 +6,8 @@ HGEOM,
 export function runTests(context) {
   const { describe, it, expect, beforeEach } = context;
   const AABB3d = HGEOM.AABB3d;
+  const Polygon3d = HGEOM.Polygon3d;
+  const Point3d = HGEOM.Point3d;
 
   describe("AABB3d Class", () => {
     let aabb;
@@ -21,25 +23,21 @@ export function runTests(context) {
       });
 
       it("should initialize with 3D infinite bounds", () => {
-        expect(aabb.min.x).to.equal(Number.NEGATIVE_INFINITY);
-        expect(aabb.min.z).to.equal(Number.NEGATIVE_INFINITY);
-        expect(aabb.max.z).to.equal(Number.POSITIVE_INFINITY);
+        expect(aabb.min.x).to.equal(Number.POSITIVE_INFINITY);
+        expect(aabb.min.z).to.equal(Number.POSITIVE_INFINITY);
+        expect(aabb.max.z).to.equal(Number.NEGATIVE_INFINITY);
       });
     });
 
     describe("Polygon3d Conversions", () => {
       it("should correctly calculate bounds from a 3D Polygon", () => {
-        // Mocking a Polygon3d with iteratePoints method
-        const mockPoly = {
-          iteratePoints: function* () {
-            yield { _x: 0, _y: 0, _z: 0, w: 1 };
-            yield { _x: 10, _y: 20, _z: 30, w: 1 };
-            yield { _x: -5, _y: 5, _z: 15, w: 1 };
-          }
-        };
-
-        AABB3d.fromPolygon3d(mockPoly, aabb);
-
+        const poly3d = Polygon3d.withPoints(
+          Point3d.build(0, 0, 0),
+          Point3d.build(10, 20, 30),
+          Point3d.build(-5, 5, 15),
+        );
+        
+        AABB3d.fromPolygon3d(poly3d, aabb);
         expect(aabb.min.x).to.equal(-5);
         expect(aabb.min.z).to.equal(0);
         expect(aabb.max.y).to.equal(20);
@@ -47,19 +45,13 @@ export function runTests(context) {
       });
 
       it("should apply perspective divide if w is not 1", () => {
-        const mockPoly = {
-          iteratePoints: function* () {
-            // Point (20, 40, 60) with w=2 should result in (10, 20, 30)
-            yield {
-              _x: 20, _y: 40, _z: 60, w: 2,
-              perspectiveDivide: function(out) {
-                out._x /= this.w; out._y /= this.w; out._z /= this.w; out.w = 1;
-              }
-            };
-          }
-        };
-
-        AABB3d.fromPolygon3d(mockPoly, aabb);
+        const poly3d = Polygon3d.withPoints(
+          Point3d.build(0, 0, 0),
+          Point3d.build(20, 40, 60, 2),
+          Point3d.build(-5, 5, 15),
+        );
+        
+        AABB3d.fromPolygon3d(poly3d, aabb);
         expect(aabb.max.x).to.equal(10);
         expect(aabb.max.z).to.equal(30);
       });
@@ -97,13 +89,10 @@ export function runTests(context) {
 
         // Segment passing through the 3D cube
         const segment = {
-          a: { x: -5, y: -5, z: -5, w: 1, arr: [-5, -5, -5], perspectiveDivide: (p) => p },
-          b: { x: 15, y: 15, z: 15, w: 1, arr: [15, 15, 15], perspectiveDivide: (p) => p },
-          subtract: function(p) {
-            return { arr: [this.b.x - p.x, this.b.y - p.y, this.b.z - p.z], [Symbol.dispose]: () => {} };
-          }
+          a: Point3d.build(-5, -5, -5),
+          b: Point3d.build(15, 15, 15),
         };
-
+        
         // Since AABB.js uses DIMS, it iterates through i=0, 1, 2
         expect(aabb.overlapsSegment(segment)).to.be.true;
       });
