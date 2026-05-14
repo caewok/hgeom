@@ -65,6 +65,43 @@ export class Polygon2d {
    */
   calculateAABB(out) { return AABB2d.fromPolygon2d(this, out); }
 
+  // ----- NOTE: Clean collinear points ----- //
+  
+  /**
+   * Remove collinear points.
+   */
+  #cleaned = false;
+  
+  clean() {
+    if ( this.#cleaned || this.points.length < 2 ) return;
+
+    const points = this.iteratePoints();
+    const result = [points.next().value];
+    for ( const curr of points ) {  
+      while ( result.length >= 2 && result.at(-2).orient(result.at(-1), curr) result.pop().release();        
+      result.push(curr);
+    }
+
+    // Clean up where end meets beginning.
+    // Loop b/c removing a point at a seam may expose a new collinearity.
+    while ( result.length >= 3 ) {
+      // Is the last point redundant? (2nd-to-last -> last -> first)
+      if ( result.at(-2).orient(result.at(-1), result[0]) ) result.pop().release();
+            
+      // Is the first point redundant? (Last -> first -> second)
+      else if ( result.at(-1).orient(result.at(0), result[1]) ) result.shift().release(); // Remove the first point.
+    }
+
+    if ( result.length < this.points.length ) {
+      // Store a new buffer array of points and delete the old.
+      const oldPoints = this.points;
+      this.points = Point2d.allocateNObjects(result.length);
+      this.points.forEach((pt, idx) => pt.copyFrom(result[idx]));
+      oldPoints.forEach(pt => pt.release());
+    }
+    this.#cleaned = true;  
+  }
+  
   // ----- NOTE: Centroid calculation ----- //
 
   /**
