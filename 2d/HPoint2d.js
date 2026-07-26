@@ -80,7 +80,7 @@ export class HPoint2d extends HPointAbstract {
     out.arr[0] = x;
     out.arr[1] = y;
     out.arr[2] = w;
-    return outPoint;
+    return out;
   }
 
   /*
