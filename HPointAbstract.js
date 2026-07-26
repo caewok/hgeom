@@ -62,7 +62,6 @@ export class PointArray {
    * @returns {HPointArray} The out object
    */
   clone(out) {
-    if ( out === this ) return out;
     out ||= this.constructor.create(this.NDIMS);
     out.arr.set(this.arr);
     return out;
@@ -520,10 +519,9 @@ export class PointArray {
    * Vector + Vector = Vector
    * Vector + Point = Point
    * @param {PointArrayAbstract} other  Point to add to this one
-   * @param {PointArrayAbstract} out    Where to store the result
    * @returns {PointArrayAbstract}
    */
-  add(other, out) { return this.constructor.add(this, other, out); }
+  add(other) { return this.constructor.add(this, other, this); }
 
   /**
    * Subtract a point/vector from another point/vector.
@@ -533,23 +531,21 @@ export class PointArray {
    * Vector - Vector = Vector
    * Vector - Point = Point (-w in most cases)
    * @param {PointArrayAbstract} other  Point to subtract from this one
-   * @param {PointArrayAbstract} out    Where to store the result
    * @returns {PointArrayAbstract}
    */
-  subtract(other, out) {
-    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, other, out);
+  subtract(other) {
+    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, other, this);
 
     // GCD
     // Like cSubtract, but skipping a few steps.
     const nDims = this.DIMS;
-    out ||= this.constructor.create(nDims);
     const a = this.arr;
     const b = other.arr;
     const m1 = this.w;
     const m2 = other.w;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
-    out.w = m1 * m2;
-    return  out;
+    for ( let i = 0, n = nDims; i < n; i += 1 ) this.arr[i] = (a[i] * m2) - (b[i] * m1);
+    this.w = m1 * m2;
+    return this;
   }
 
   /**
@@ -557,10 +553,9 @@ export class PointArray {
    * Note that has no real effect on points because dividing by w cancels it out.
    * It does scale vectors.
    * @param {PointArrayAbstract} c          The scalar to multiply
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  scale(c, out) { return this.constructor.multiplyScalar(this, c, out); }
+  scale(c) { return this.constructor.multiplyScalar(this, c, this); }
 
   /**
    * Apply a function elementwise to each coordinate, including w.
@@ -568,7 +563,6 @@ export class PointArray {
    * - @param {number} value
    * - @param {number} index
    * - @param {number} w value
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
   applyElementWise(callback, out) {
