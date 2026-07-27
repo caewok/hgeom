@@ -98,44 +98,48 @@ export class PointArray {
 
   /**
    * Add a vector to this one, elementwise.
-   * @param {PointArrayAbstract} p1      The vector to add
-   * @param {PointArrayAbstract} p2      The other vector to add
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to add
+   * @param {PointArrayAbstract} ...      The other vectors to add
    * @returns {PointArrayAbstract}
    */
-  static add(p1, p2, out) {
+  static add(out, p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    const b = p2.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] + b[i];
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i];
+      for ( const pt of pts ) out.arr[i] += pts.arr[i];
+    }
     return out;
   }
 
   /**
    * Subtract a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} p1      The vector to subtract from
-   * @param {PointArrayAbstract} p2      The other vector to subtract
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to subtract from
+   * @param {PointArrayAbstract} ...      The other vectors to subtract
    * @returns {PointArrayAbstract}
    */
-  static subtract(p1, p2, out) {
+  static subtract(out, p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    const b = p2.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] - b[i];
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i];
+      for ( const pt of pts ) out.arr[i] -= pt;
+    }
     return out;
   }
 
   /**
    * Multiply a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} p1      The vector to multiply
-   * @param {PointArrayAbstract} p2      The other vector to multiply with
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to multiply
+   * @param {PointArrayAbstract} ...      The other vectors to multiply with
    * @returns {PointArrayAbstract}
    */
-  static multiply(p1, p2, out) {
+  static multiply([out], p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
