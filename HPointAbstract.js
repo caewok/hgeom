@@ -143,7 +143,28 @@ export class PointArray {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i] * b[i];
+      for ( const pt of pts ) out.arr[i] *= pt;
+    }
+    return out;
+  }
+  
+  /**
+   * Divide a point vector to this one, elementwise.
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to divide
+   * @param {PointArrayAbstract} ...      The other vectors to divide with
+   * @returns {PointArrayAbstract}
+   */
+  static divide(out, p1, ...pts) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i] * b[i];
+      for ( const pt of pts ) out.arr[i] /= pt;
+    }
     return out;
   }
 
@@ -187,40 +208,14 @@ export class PointArray {
     const nDims = p.DIMS;
     out ||= this.create(nDims);
     const a = p.arr;
+    const w = a[nDims];
     let denom = 1;
     for ( let i = 0; i < nDims; i += 1 ) {
-      out.arr[i] = a[nDims];
+      out.arr[i] = w;
       denom *= a[i];
     }
     out.w = denom;
     return out;
-  }
-
-  /**
-   * Divide a point by another.
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @param {PointArrayAbstract} p      The vector to divide
-   * @param {PointArrayAbstract} ...      The other vectors to divide with
-   * @returns {PointArrayAbstract}
-   */
-  static divide(out, p1, ...pts) {
-    // [x,y,w]/[x',y',w'] = [x/x', y/y', w/w'] = [x/x' / w/w', y/y' / w/w', 1]
-    //   = [x*w' / x'*w, y*w' / y'*w, 1] = [(x*w')*(y'*w) / (x'*w) * (y'*w), (y*w')*(x'*w)/(x'*w) * (y'*w), 1]
-    //   = [(x*w')*(y'*w), (y*w')*(x'*w), (x'*w) * (y'*w)]
-    //   = [x*y'*w', x'*y*w', x'*y'*w]
-    // Or [x,y,w] * (1/[x',y',w'])
-    
-    
-    
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i];
-      
-    }
-    return out;
-    
   }
 
   /**
@@ -535,7 +530,7 @@ export class PointArray {
    * @param {PointArrayAbstract} other  Point to add to this one
    * @returns {PointArrayAbstract}
    */
-  add(other) { return this.constructor.add(this, other, this); }
+  add(other) { return this.constructor.add(this, this, other); }
 
   /**
    * Subtract a point/vector from another point/vector.
@@ -548,7 +543,7 @@ export class PointArray {
    * @returns {PointArrayAbstract}
    */
   subtract(other) {
-    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, other, this);
+    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, this, other);
 
     // GCD
     // Like cSubtract, but skipping a few steps.
@@ -579,14 +574,15 @@ export class PointArray {
    * - @param {number} w value
    * @returns {PointArrayAbstract}
    */
-  applyElementWise(callback, out) {
+  static applyElementWise(pt, callback, out) {
     const nDims = this.DIMS;
-    out ||= this.constructor.create(nDims);
-    const a = this.arr;
-    const w = this.w;
+    out ||= pt.constructor.create(nDims);
+    const a = pt.arr;
+    const w = pt.w;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
-  }
+
+  applyElementWise(callback) { return this.constructor.applyElementWise(this, callback, this); }
 
   /**
    * Apply a function elementwise to each coordinate, except w.
@@ -597,14 +593,16 @@ export class PointArray {
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  applyCoordinateWise(callback, out) {
+  static applyCoordinateWise(pt, callback, out) {
     const nDims = this.DIMS;
-    out ||= this.constructor.create(nDims);
-    const a = this.arr;
-    const w = this.w;
+    out ||= pt.constructor.create(nDims);
+    const a = pt.arr;
+    const w = pt.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
   }
+  
+  applyCoordinateWise(callback) { return this.constructor.applyCoordinateWise(this, callback, this); }
 
   // ----- NOTE: Matrix transform ----- //
 
