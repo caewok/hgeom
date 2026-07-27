@@ -139,11 +139,10 @@ export class PointArray {
    * @param {PointArrayAbstract} ...      The other vectors to multiply with
    * @returns {PointArrayAbstract}
    */
-  static multiply([out], p1, ...pts) {
+  static multiply(out, p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    const b = p2.arr;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
     return out;
   }
@@ -199,18 +198,29 @@ export class PointArray {
 
   /**
    * Divide a point by another.
-   * @param {PointArrayAbstract} p      The vector to divide
-   * @param {PointArrayAbstract} other      The other vector to divide by
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
+   * @param {PointArrayAbstract} p      The vector to divide
+   * @param {PointArrayAbstract} ...      The other vectors to divide with
    * @returns {PointArrayAbstract}
    */
-  static divide(p1, p2, out) {
+  static divide(out, p1, ...pts) {
     // [x,y,w]/[x',y',w'] = [x/x', y/y', w/w'] = [x/x' / w/w', y/y' / w/w', 1]
     //   = [x*w' / x'*w, y*w' / y'*w, 1] = [(x*w')*(y'*w) / (x'*w) * (y'*w), (y*w')*(x'*w)/(x'*w) * (y'*w), 1]
     //   = [(x*w')*(y'*w), (y*w')*(x'*w), (x'*w) * (y'*w)]
-    // Or [x,y,w] * (1/[x',y',w']) = [x,y,w] * [w', w', x'*y'] = [x*w', y*w', w*x'*y']
-    this.invert(p2, out);
-    return this.multiply(p1, out, out);
+    //   = [x*y'*w', x'*y*w', x'*y'*w]
+    // Or [x,y,w] * (1/[x',y',w'])
+    
+    
+    
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i];
+      
+    }
+    return out;
+    
   }
 
   /**
