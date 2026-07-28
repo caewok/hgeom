@@ -270,19 +270,17 @@ export class AABB2d {
 
   /**
    * Make the bounds finite.
-   * @param {AABB2d} [out]      Where to store the resulting aabb
    * @returns {AABB2d}
    */
-  makeFinite(out) {
-    out = this.clone(out);
-    const { min, max } = out;
+  makeFinite() {
+    const { min, max } = this;
     for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
       if ( !Number.isFinite(max.arr[i]) ) max.arr[i] = Number.MAX_SAFE_INTEGER;
       if ( !Number.isFinite(min.arr[i]) ) min.arr[i] = Number.MIN_SAFE_INTEGER;
     }
     min.w = 1;
     max.w = 1;
-    return out;
+    return this;
   }
 
   // ----- NOTE: Overlap and contains methods ---- //
@@ -305,8 +303,8 @@ export class AABB2d {
   containsPoint(p, axes, epsilon = 1e-06) {
     axes ??= this.constructor.axes;
     const { min, max } = this;
-    if ( !p.x.almostBetween(min._x, max._x, epsilon) ) return false
-    if ( !p.y.almostBetween(min._y, max._y, epsilon) ) return false
+    if ( !p.x.almostBetween(min._x, max._x, epsilon) ) return false;
+    if ( !p.y.almostBetween(min._y, max._y, epsilon) ) return false;
     return true;
   }
 
@@ -340,7 +338,7 @@ export class AABB2d {
     const { a, b } = segment;
     if ( a.w !== 1 ) a.perspectiveDivide(a);
     if ( b.w !== 1 ) b.perspectiveDivide(b);
-    using rayDirection = b.subtract(a);
+    using rayDirection = b.clone().subtract(a);
 
     for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
       const min = this.min.arr[i];
