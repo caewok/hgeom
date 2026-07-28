@@ -1,4 +1,4 @@
-/* globals
+i/* globals
 HGEOM,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -528,9 +528,10 @@ export class PointArray {
    * Vector + Vector = Vector
    * Vector + Point = Point
    * @param {PointArrayAbstract} other  Point to add to this one
+   * @param {PointArrayAbstract} ...    Additional points to add to this one
    * @returns {PointArrayAbstract}
    */
-  add(other) { return this.constructor.add(this, this, other); }
+  add(other, ...pts) { return this.constructor.add(this, this, other, ...pts); }
 
   /**
    * Subtract a point/vector from another point/vector.
@@ -540,13 +541,18 @@ export class PointArray {
    * Vector - Vector = Vector
    * Vector - Point = Point (-w in most cases)
    * @param {PointArrayAbstract} other  Point to subtract from this one
+   * @param {PointArrayAbstract} ... Additional points to subtract from this one
    * @returns {PointArrayAbstract}
    */
-  subtract(other) {
-    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, this, other);
+  subtract(other, ...pts) {
+    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, this, other, ...pts);
 
     // GCD
     // Like cSubtract, but skipping a few steps.
+    if ( pts.length ) {
+      [other, ...pts].forEach(pt => this.subtract(pt);
+      return this;
+    }
     const nDims = this.DIMS;
     const a = this.arr;
     const b = other.arr;
@@ -575,7 +581,7 @@ export class PointArray {
    * @returns {PointArrayAbstract}
    */
   static applyElementWise(pt, callback, out) {
-    const nDims = this.DIMS;
+    const nDims = pt.DIMS;
     out ||= pt.constructor.create(nDims);
     const a = pt.arr;
     const w = pt.w;
@@ -594,7 +600,7 @@ export class PointArray {
    * @returns {PointArrayAbstract}
    */
   static applyCoordinateWise(pt, callback, out) {
-    const nDims = this.DIMS;
+    const nDims = pt.DIMS;
     out ||= pt.constructor.create(nDims);
     const a = pt.arr;
     const w = pt.w;
@@ -608,17 +614,20 @@ export class PointArray {
 
   /**
    * Multiply this point by a matrix.
+   * @param {PointArray} pt
    * @param {Matrix} M
    * @param {PointArray} [out]
    * @returns {PointArray}
    */
-  transform(M, out) {
+  static transform(pt, M, out) {
     out ||= this.constructor.create(this.DIMS);
-    const mPoint = Matrix.fromHPoint(this);
-    const mOut = Matrix.fromHPoint(out); // Will share the array.
+    using mPoint = Matrix.fromHPoint(this);
+    using mOut = Matrix.fromHPoint(out); // Will share the array.
     mPoint.multiply(M, mOut);
     return out;
   }
+  
+  transform(M) { return this.constructor.transform(this, M, this); }
 
   // ----- NOTE: Vectorize ----- //
 
@@ -664,12 +673,11 @@ export class PointArray {
    * @param {HPointAbstrat} out
    * @returns {HPointArray} out  This point with w set to 1.
    */
-  perspectiveDivide(out) {
+  perspectiveDivide() {
     if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
     out ||= this.constructor.newInstance;
-    this.clone(out);
-    out.multiplyScalar(1/out.w);
-    return out;
+    this.multiplyScalar(1/this.w);
+    return this;
   }
 
   /**
@@ -720,17 +728,15 @@ export class PointArray {
   /**
    * Normalize by dividing this vector by the magnitude.
    * Only well-defined for vectors.
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  normalize(out) { return this.constructor.divideScalar(this, this.magnitude(), out); }
+  normalize() { return this.constructor.divideScalar(this, this.magnitude(), this); }
 
   /**
    * Use the cartesian magnitude to normalize.
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  cNormalize(out) { return this.constructor.cDivideScalar(this, this.cMagnitude(), out); }
+  cNormalize() { return this.constructor.cDivideScalar(this, this.cMagnitude(), this); }
 
   // ----- NOTE: Static Cross ----- //
 
@@ -828,7 +834,7 @@ export class PointArray {
     const ab = this.dot(a, b);
     using scaledB = this.multiplyScalar(b, ac)
     using scaledC = this.multiplyScalar(c, ab);
-    return this.subtract(scaledB, scaledC, out);
+    return this.subtract(out, scaledB, scaledC);
   }
 
   /**
