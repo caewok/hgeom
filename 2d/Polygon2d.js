@@ -63,7 +63,7 @@ export class Polygon2d {
   /**
    * Geometric centroid is the average of its vertices.
    * @param {Point2d} out
-   * @returns {Point2d
+   * @returns {Point2d}
    */
   normalizedGeometricCentroid(out) {
     out ||= Point2d.newInstance;
@@ -89,7 +89,7 @@ export class Polygon2d {
     out ||= Point2d.newInstance;
     out.arr.fill(0);
     const n = this.length;
-    for ( let i = 0; i < n; i += 1 ) out.add(this.points[i], out);
+    for ( let i = 0; i < n; i += 1 ) out.add(this.points[i]);
     return out;
   }
 
