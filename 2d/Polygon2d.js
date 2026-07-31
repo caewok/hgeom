@@ -4,7 +4,7 @@ PIXI,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Point2d, Line2d } from "./Point2d.js";
+import { Point2d, Line2d, Ray2d, Segment2d } from "./Point2d.js";
 import { AABB2d } from "./AABB2d.js";
 
 /**
@@ -315,16 +315,14 @@ export class Polygon2d {
 
   /**
    * Iterate the edges of this polygon.
-   * @yield {object}            Two points of the polygon; not copied.
-   *   - @prop {Point2d} a
-   *   - @prop {Point2d} b
+   * @yield {Segment}            Two points of the polygon; not copied.
    * For efficiency, the edge between the last point and the first point will be iterated first.
    */
   *iterateEdges() {
     let a = this.points.at(-1);
     for ( let i = 0, n = this.points.length; i < n; i += 1 ) {
       const b = this.points[i];
-      yield { a, b };
+      yield new Segment2d(a, b);
     }
   }
 
@@ -345,7 +343,7 @@ export class Polygon2d {
     let a = this.points.at(0);
     for ( let i = this.points.length - 1; i > -1; i -= 1 ) {
       const b = this.points[i];
-      yield { a, b };
+      yield new Segment2d(a, b);
     }
   }
 
@@ -451,25 +449,25 @@ convexHull() {
     using dir = Point2d.build(1, 1e-06, 0); // use a slight angle to avoid passing exactly theiughs vertex..
     const r = new Ray2d(pt, dir);
     for ( const edge of this.iterateEdges() {
-       if ( ray.intersectsSegment(edge.a, edge.b) ) inside != inside;
+       if ( ray.intersectsSegment(edge) ) inside != inside;
     }
     return inside;
   }
   
   
   /**
-   * Test whether line segment AB intersects this polygon.
+   * Test whether line segment a|b intersects this polygon.
    * Equivalent to PIXI.Rectangle.prototype.lineSegmentIntersects.
-   * @param {Point} a                       The                 The second endpoint of segment AB
+   * @param {Segment2d} s                   The second endpoint of segment a|b
    * @param {object} [options]              Options affecting the intersect test.
    * @param {boolean} [options.inside]      If true, a line contained within the rectangle will
    *                                        return true.
    * @returns {boolean} True if intersects.
    */
-  lineSegmentIntersects(a, b, { inside = false } = {}) {
-    if ( this.contains(a.x, a.y) && this.contains(b.x, b.y) ) return inside;
+  segmentIntersects(s, { inside = false } = {}) {
+    if ( this.contains(s.a) && this.contains(s.b) ) return inside;
     for ( const edge of this.iterateEdges() ) {
-      if ( foundry.utils.lineSegmentIntersects(a, b, edge.a, edge.b) ) return true;
+      if ( s.intersects(edge) ) return true;
     }
     return false;
   }
