@@ -111,3 +111,123 @@ export class Line2d extends HPoint2d {
     return this.cross(other, out);
   }
 }
+
+export class Ray2d {
+  
+  static [Symbol.hasInstance](instance) {
+    return instance && instance.constructor && instance.constructor._geoLibType === this._geoLibType;
+  }
+
+  static get _geoLibType() { return this.name; }
+  
+  /** @type {Point2d} */
+  origin;
+  
+  /** @type {Point2d} */
+  direction;
+  
+  /**
+   * Use existing points to create the ray. 
+   * @param {Point2d} origin
+   * @param {Point2d} direction
+   * @returns {Ray2d} 
+   */
+  constructor(origin, direction) {
+    this.origin = origin;
+    this.direction = direction;
+  }
+  
+  [Symbol.dispose]() { this.release(); }
+
+  release() {
+    this.origin.release();
+    this.direction.release();
+    this.origin = null;
+    this.direction = null;
+  }
+  
+  /**
+   * Copy points to create the ray. 
+   * @param {Point2d} origin
+   * @param {Point2d} direction
+   * @returns {Ray2d} 
+   */
+  static fromPoints(origin, direction) {
+    const pts = Point2d.allocateNObjects(2);
+    const out = new this(pts[0], pts[1]);
+    out.origin.copyFrom(origin);
+    out.direction.copyFrom(direction);
+    return out;
+  }
+  
+  /** 
+   * Normalize the direction vector. 
+   * @returns {Ray2d}
+   */
+  #normalized = false;
+  
+  get normalized() { return this.#normalized; }
+
+  normalize() { 
+    if ( !this.#normalized ) {
+      this.direction.normalize(); 
+      this.#normalized = true;
+    }
+    return this;
+  }
+  
+  // ----- NOTE: Intersection ----- //
+  
+  /** 
+   * Calculate a point along the ray. 
+   * @param {number} t
+   * @returns {Point2d}
+   */
+  at(t) { 
+    return this.direction.clone().multiplyScalar(t).add(this.origin);
+  }
+  
+  /**
+   * @param {Point2d} a
+   * @param {Point2d} b
+   * @returns {number|null}
+  */
+  segmentIntersection(a, b) {
+    // Denominator is the 2d cross of the vectors. 
+    using v = b.clone().subtract(a);
+    const denom = v.cross2d(this.direction);
+    if ( denom.almostEqual(0) ) return null; // Parallel lines. 
+
+    // Solve for t (magnitude along the ray) and u (magnitude along the segment). 
+    using w = a.clone().subtract(this.origin);
+    const u = w.cross2d(this.direction);
+    if ( !u.between(0, 1) ) return null;
+    
+    const t = w.cross2d(v);
+    if ( t < 0 ) return null;
+    return t; // TODO: Could return an object with t and w if useful. 
+  }
+  
+  /**
+   * @param {Point2d} a
+   * @param {Point2d} b
+   * @returns {boolean}
+  */
+  segmentIntersection(a, b) {
+    return this.segmentIntersection(a, b) !== null;
+  }
+  
+  /**
+   * Intersection of the ray with a line. 
+   * @param {Line2d} l
+   * @returns {number|null}
+   */
+  lineIntersection(l) {
+    const dirDotL = this.direction.dot(l);
+    const origDotL = this.origin.dot(l);
+    const t = -origDotL / dirDotL;
+    return t < 0 ? null : t;
+  }
+  
+}
+
