@@ -446,14 +446,14 @@ convexHull() {
    * @returns {boolean}
    */
   contains(pt) {
+    // Cast a ray from the point and count how many edges it crosses.
     let inside = false;
+    using dir = Point2d.build(1, 1e-06, 0); // use a slight angle to avoid passing exactly theiughs vertex..
+    const r = new Ray2d(pt, dir);
     for ( const edge of this.iterateEdges() {
-      // Cast a ray from the point and count how many edges it crosses. 
-      
-      
-      
+       if ( ray.intersectsSegment(edge.a, edge.b) ) inside != inside;
     }
-    
+    return inside;
   }
   
   
