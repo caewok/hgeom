@@ -106,7 +106,7 @@ export class Line2d extends HPoint2d {
    * @param {Line2d} other
    * @param {Point2d} out
    */
-  intersect(other, out) {
+  intersection(other, out) {
     out ||= Point2d.newInstance;
     return this.cross(other, out);
   }
@@ -230,4 +230,176 @@ export class Ray2d {
   }
   
 }
+
+export class Segment2d {
+  
+  static [Symbol.hasInstance](instance) {
+    return instance && instance.constructor && instance.constructor._geoLibType === this._geoLibType;
+  }
+
+  static get _geoLibType() { return this.name; }
+  
+  [Symbol.dispose]() { this.release(); }
+
+  release() {
+    this.a?.release();
+    this.b?.release();
+    this.a = null;
+    this.b = null;
+    
+    this.clearCache();
+  }
+  
+  /** @prop {Point2d} */
+  a;
+  
+  /** @prop {Point2d} */
+  b;
+  
+  constructor() {
+    this.a = a;
+    this.b = b;
+  }
+  
+  /**
+   * Copy the points instead of using them directly. 
+   * @param {Point2d} a
+   * @param {Point2d} b
+   * @returns {Segment2d}
+   */
+  static fromPoints(a, b) {
+    const pts = Point2d.allocateNObjects(2);
+    const out = new this(pts[0], pts[1]);
+    return out;
+  }
+  
+  clearCache() {
+    this.#aabb?.release();
+    this.#aabb = null;
+    
+    this.#delta?.release();
+    this.#delta = null;
+    
+    this.#line?.release();
+    this.#line = null;
+  }
+  
+  // ----- NOTE: AABB ----- //
+  
+  #aabb;
+  
+  get aabb() {
+    if ( !this.#aabb ) this.#aabb = AABB2d.fromPoints([this.a, this.b]);
+    return this.#aabb;
+  }
+  
+  // ----- NOTE: Basic calculations ----- //
+  
+  /**
+   * Difference between the two points.
+   * @type {PIXI.Point|Point3d}
+   */
+  #delta;
+
+  get delta() { 
+    if ( !this.#delta ) this.#delta = this.b.clone().subtract(this.a); 
+    return this.#delta;
+  }
+
+  /**
+   * Center point
+   * @type {PIXI.Point|Point3d}
+   */
+  get midpoint() {
+    return this.a.clone().add(this.b).multiplyScalar(0.5);
+  }
+
+  /**
+   * Length of the segment.
+   * @type {number}
+   */
+  get length() {
+    using d = this.delta;
+    return d.magnitude();
+  }
+
+  /**
+   * Length squared of the segment.
+   * @type {number}
+   */
+  get lengthSquared() {
+    using d = this.delta;
+    return d.magnitudeSquared();
+  }
+
+  /**
+   * Angle of the XY edge on the 2d canvas.
+   * @type {number}
+   */
+  get angleXY() {
+    using d = this.delta;
+    return Math.atan2(d.y, d.x);
+  }
+  
+  /**
+   * Infinite line through these endpoints. 
+   * @type {Line2d}
+   */
+  #line;
+  
+  get line() { 
+    if ( !this.#line ) this.#line = Line2d.fromPoints(this.a, this.b);
+    return this.#line;
+  }
+  
+  // ----- NOTE: Intersection ----- //
+
+  /**
+   * What is the intersection point of this segment with another?
+   * @param {Segment2d} other
+   * @returns {Point2d|null}
+   */
+  intersection(other) {
+    // Get the infinite lines. 
+    const l1 = this.line;
+    const l2 = other.line;
+    using ix = l1.intersection(l2);
+    
+    // If lines parallel, no intersection. w = 0.
+    // TODO: better to just set w to 0 if nit wothin bounds?
+    if ( ix.w.almostEqual(0) ) return null;
+
+    // Otherwise, must lie within the bounding boxes of both segments. 
+    return this.aabb.contains(ix) && other.aabb.contains(ix) ? ix : null;
+  }
+  
+  /**
+   * Quickly test whether the line segment AB intersects with the line segment CD.
+   * This method does not determine the point of intersection, for that use lineLineIntersection.
+   * @param {Segment2d} other                   Segment c|d to test
+   * @returns {boolean}                 Do the line segments intersect?
+   */
+  lineSegmentIntersects(other) {
+    // TODO: better to use orientation test?
+  /*
+  // First test the orientation of A and B with respect to CD to reject collinear cases
+  const xa = foundry.utils.orient2dFast(a, b, c);
+  const xb = foundry.utils.orient2dFast(a, b, d);
+  if ( !xa && !xb ) return false;
+  const xab = (xa * xb) <= 0;
+
+  // Also require an intersection of CD with respect to AB
+  const xcd = (foundry.utils.orient2dFast(c, d, a) * foundry.utils.orient2dFast(c, d, b)) <= 0;
+  return xab && xcd;
+  */
+}
+}
+
+
+function orient2dFast(a, b, c) {
+  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
+
+
+
 
