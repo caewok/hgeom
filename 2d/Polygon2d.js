@@ -42,6 +42,12 @@ export class Polygon2d {
 
   // ----- NOTE: Getters ----- //
 
+  /**
+   * Determine whether this Polygon is closed, defined by having the same starting and ending point.
+   * @type {boolean}
+   */
+  get isClosed() { return this.points.at(-1).almostEqual(this.points.at(0)); }
+
   // ----- NOTE: Cache ----- //
 
   /** 
@@ -354,19 +360,31 @@ export class Polygon2d {
   /**
    * Add a de-duplicated point to the Polygon.
    * If collinear, will drop the previous point. 
-   * @param {Point2d} point    The point to add to the Polygon
+   * @param {Point2d} pt       The point to add to the Polygon
    * @returns {Polygon2d}      A reference to the polygon for method chaining
    */
-  addPoint() {
+  addPoint(pt) {
     const n = this.points.length;
     if ( !n ) {
-      this.points.push(
-      
+      this.points.push(pt);
+      this.clearCache();
+      return this;
     }
     
-    const l = this.points.length;
-    if ( (x === this.points[l - 2]) && (y === this.points[l - 1]) ) return this;
-    this.points.push(x, y);
+    // Ignore duplicate points. 
+    const b = this.points.at(-1);
+    if ( b.almostEqual(pt) ) return this;
+    
+    if ( n === 1 ) {
+      this.points.push(pt);
+      this.clearCache();
+      return this;
+    }
+    
+    // Prevent collinear points by dropping the middle point. 
+    const a = this.points.at(-2);
+    if ( Point2d.cOrient(a, b, pt).almostEqual(0) ) this.points[n - 1] = pt; // Replace b with the new point. 
+    else this.points.push(pt);
     this.clearCache();
     return this;
   };
@@ -408,6 +426,54 @@ convexHull() {
   return this.constructor.fromPoints(upperHull.concat(lowerHull));
 }
 
+  // ----- NOTE: Transforms ----- //
+
+  /**
+   * Transform this polygon by a 3x3 matrix.
+   * @param {Matrix} M
+   * @returns {Polygon2d}
+   */
+  transform(M) {
+    this.iteratePoints().forEach(pt => M.multiplyPoint(pt));
+    return this;
+  }
+  
+  // ----- NOTE: Intersection ----- //
+
+  /**
+   * Does this point's coordinates lie within this polygon?
+   * @param {Point2d} pt
+   * @returns {boolean}
+   */
+  contains(pt) {
+    let inside = false;
+    for ( const edge of this.iterateEdges() {
+      // Cast a ray from the point and count how many edges it crosses. 
+      
+      
+      
+    }
+    
+  }
+  
+  
+  /**
+   * Test whether line segment AB intersects this polygon.
+   * Equivalent to PIXI.Rectangle.prototype.lineSegmentIntersects.
+   * @param {Point} a                       The                 The second endpoint of segment AB
+   * @param {object} [options]              Options affecting the intersect test.
+   * @param {boolean} [options.inside]      If true, a line contained within the rectangle will
+   *                                        return true.
+   * @returns {boolean} True if intersects.
+   */
+  lineSegmentIntersects(a, b, { inside = false } = {}) {
+    if ( this.contains(a.x, a.y) && this.contains(b.x, b.y) ) return inside;
+    for ( const edge of this.iterateEdges() ) {
+      if ( foundry.utils.lineSegmentIntersects(a, b, edge.a, edge.b) ) return true;
+    }
+    return false;
+  }
+  
   
 
 }
