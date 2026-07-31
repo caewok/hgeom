@@ -189,18 +189,17 @@ export class Ray2d {
   }
   
   /**
-   * @param {Point2d} a
-   * @param {Point2d} b
+   * @param {Segment2d} s
    * @returns {number|null}
   */
-  segmentIntersection(a, b) {
+  segmentIntersection(s) {
     // Denominator is the 2d cross of the vectors. 
-    using v = b.clone().subtract(a);
+    const v = s.delta;
     const denom = v.cross2d(this.direction);
     if ( denom.almostEqual(0) ) return null; // Parallel lines. 
 
     // Solve for t (magnitude along the ray) and u (magnitude along the segment). 
-    using w = a.clone().subtract(this.origin);
+    using w = s.a.clone().subtract(this.origin);
     const u = w.cross2d(this.direction);
     if ( !u.between(0, 1) ) return null;
     
@@ -210,12 +209,39 @@ export class Ray2d {
   }
   
   /**
-   * @param {Point2d} a
-   * @param {Point2d} b
+   * @param {Segment2d} s
    * @returns {boolean}
   */
-  segmentIntersection(a, b) {
-    return this.segmentIntersection(a, b) !== null;
+  segmentIntersects(s) {
+    // When a robust orientation function like ⁠orient(a, b, c)⁠ calculates the determinant of three homogeneous points, passing a direction vector as one of the points perfectly evaluates its position "at infinity."
+    // Evaluate which side of the ray the segment lies. 
+    // Direction acts as point at infinity to define the line woth origin
+    // TODO: if caching values, cache a line amd use it here. 
+    const v1 = Point2d.orient(this.origin, this.direction, s.a);
+    const v2 = Point2d.orient(this.origin, this.direction, s.a);
+    
+    // Evaluate which side of the segment lies the ray origin and direction
+    const v3 = s.line.orient(this.origin);
+    const v4 = s.line.orient(this.direction);
+    
+    // Edge case: Segment and ray are collinear. 
+    if ( v1.almostEqual(0) && v2.almostEqual(0) ) {
+      // Project a and b onto ray direction, relative to origin
+      using vA = s.a.clone().subtract(this.origin);
+      using vB = s.b.clone().subtract(this.origin);
+      const dotA = vA.dot(this.direction);
+      const dotB = vB.dot(this.direction);
+      
+      // If either projection is non-negative, segment overlaps. 
+      return dotA >= 0 || dotB >= 0;
+    }
+    
+    // Standard ix logic. 
+    // Check for opposite signs. 
+    // Use boolean logic instead of multiplying to avoid floating point overflow.  
+    const crossesRay = (v1 <= 0 && v2 >= 0) || (v1 >= 0 && v2 <= 0);
+    const pointsTowardSegment = (v3 <= 0 && v4 >= 0) || (v3 >= 0 && v4 <= 0);
+    return crossesRay && pointsTowardSegment;
   }
   
   /**
