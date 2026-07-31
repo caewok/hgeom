@@ -17,13 +17,20 @@ import { AABB2d } from "./AABB2d.js";
  */
 
 export class Polygon2d {
+  
+  static [Symbol.hasInstance](instance) {
+    return instance && instance.constructor && instance.constructor._geoLibType === this._geoLibType;
+  }
+
+  static get _geoLibType() { return this.name; }
+  
   /** @type {Point2d} */
   points = [];
 
   // TODO: Is it worth storing lines for polygon edges? Maybe cached? Or vectors?
 
-  constructor(n = 3) {
-    this.points.length = n;
+  constructor(n = 0) {
+    if ( n ) this.points = Point2d.allocateN(n);
   }
 
   [Symbol.dispose]() { this.release(); }
@@ -35,9 +42,117 @@ export class Polygon2d {
 
   // ----- NOTE: Getters ----- //
 
-  /** @type {number} */
-  get length() { return this.points.length; }
+  // ----- NOTE: Cache ----- //
 
+  /** 
+   * Clear getter caches. 
+   */
+  clearCache() {
+    this.#dirtyAABB = true;
+    this.#dirtyCentroid = true;
+    this.#cleaned = false;
+    this.#isPositive = undefined;
+  }
+
+  /**
+   * Remove collinear points. 
+   */
+  #cleaned = false;
+  
+  clean() {
+    if ( this.#cleaned ) return;
+    if ( this.points.length < 2 ) return;
+    
+    const points = this.iteratePoints();
+    const result = [points.next().value];
+    for ( const curr of points ) {
+      if ( result.at(-1).almostEqual(curr) ) continue;
+      while ( result.length >= 2
+        && pointsAreCollinear(result.at(-2), result.at(-1), curr) ) result.pop().release();
+      result.push(curr);
+    }
+
+    // Clean up where end meets beginning.
+    // Loop b/c removing a point at a seam may expose a new collinearity.
+    while ( result.length >= 3 ) {
+      // Is the last point a duplicate of the first?
+      if ( result[0].almostEqual(result.at(-1)) ) {
+        result.pop().release();
+        break;
+      }
+
+      // Is the last point redundant? (2nd-to-last -> last -> first)
+      if ( pointsAreCollinear(result.at(-2), result.at(-1), result[0]) ) {
+        result.pop().release();
+        break;
+      }
+
+      // Is the first point redundant? (Last -> first -> second)
+      if ( pointsAreCollinear(result.at(-1), result.at(0), result[1]) ) {
+        result.shift().release(); // Remove the first point.
+        break;
+      }
+    }
+
+    // Copy over the points if necessary.
+    if ( result.length < this.points.length ) {
+      this.points.length = result.length;
+      this.points.forEach((pt, idx) => pt.copyFrom(result[idx]));
+    }
+    this.#cleaned = true;
+  }
+  
+  // ----- NOTE: Orientation ----- //
+  
+  /**
+   * Test whether the polygon is has a positive signed area.
+   * Using a y-down axis orientation, this means that the polygon is "clockwise".
+   * @type {boolean}
+   */
+  #isPositive;
+  
+  get isPositive() {
+    this.#isPositive ??= this.signedArea() > 0;
+    return this.#isPositive;
+  }
+  
+  /**
+   * Compute the signed area of polygon using an approach similar to ClipperLib.Clipper.Area.
+   * The math behind this is based on the Shoelace formula. https://en.wikipedia.org/wiki/Shoelace_formula.
+   * The area is positive if the orientation of the polygon is positive.
+   * @returns {number}              The signed area of the polygon
+   */
+  signedArea() {
+    const points = this.points;
+    const ln = points.length;
+    if ( ln < 3 ) return 0;
+
+    // Compute area
+    let area = 0;
+    let a = this.points.at(-1);
+    for ( const b of this.iteratePoints() ) { 
+      // TODO: can we simplify this for homogenous points?
+      area += (b.x - a.x) * (b.y + a.y);
+      a = b;
+    }
+
+    // Negate the area because in Foundry canvas, y-axis is reversed
+    // See https://sourceforge.net/p/jsclipper/wiki/documentation/#clipperlibclipperorientation
+    // The 1/2 comes from the Shoelace formula
+    return area * -0.5;
+  };
+  
+  /**
+   * Reverse the order of the polygon points in-place, replacing the points array into the polygon.
+   * Note: references to the old points array will not be affected.
+   * @returns {PIXI.Polygon}      This polygon with its orientation reversed
+   */
+  reverseOrientation() {
+    const reversedPts = [...this,reverseIteratePoints()];
+    this.points = reversedPts;
+    if ( this.#isPositive !== undefined ) this.#isPositive = !this.#isPositive;
+    return this;
+  };
 
   // ----- NOTE: AABB ----- //
 
@@ -235,7 +350,94 @@ export class Polygon2d {
   *reverseIteratePoints() {
     for ( let i = this.points.length - 1; i > -1; i -= 1 ) yield this.points[i];
   }
+  
+  /**
+   * Add a de-duplicated point to the Polygon.
+   * If collinear, will drop the previous point. 
+   * @param {Point2d} point    The point to add to the Polygon
+   * @returns {Polygon2d}      A reference to the polygon for method chaining
+   */
+  addPoint() {
+    const n = this.points.length;
+    if ( !n ) {
+      this.points.push(
+      
+    }
+    
+    const l = this.points.length;
+    if ( (x === this.points[l - 2]) && (y === this.points[l - 1]) ) return this;
+    this.points.push(x, y);
+    this.clearCache();
+    return this;
+  };
+  
+  // ----- NOTE: Convex hull ----- //
+  
+  /**
+ * Convex hull algorithm.
+ * Returns a polygon representing the convex hull of the given points.
+ * Excludes collinear points.
+ * Runs in O(n log n) time
+ * @returns {PIXI.Polygon}
+ */
+convexHull() {
+  const ln = this.points.length;
+  if ( ln <= 1 ) return points;
 
+  const newPoints = [...points];
+  newPoints.sort(convexHullCmpFn);
+
+  // Andrew's monotone chain algorithm.
+  const upperHull = [];
+  for ( let i = 0; i < ln; i += 1 ) {
+    testHullPoint(upperHull, newPoints[i]);
+  }
+  upperHull.pop();
+
+  const lowerHull = [];
+  for ( let i = ln - 1; i >= 0; i -= 1 ) {
+    testHullPoint(lowerHull, newPoints[i]);
+  }
+  lowerHull.pop();
+
+  if ( upperHull.length === 1
+    && lowerHull.length === 1
+    && upperHull[0].x === lowerHull[0].x
+    && upperHull[0].y === lowerHull[0].y ) return this.constructor.fromPoints(upperHull);
+
+  return this.constructor.fromPoints(upperHull.concat(lowerHull));
+}
+
+  
+
+}
+
+/**
+ * Comparison function used by convex hull function.
+ * @param {Point} a
+ * @param {Point} b
+ * @returns {boolean}
+ */
+function convexHullCmpFn(a, b) {
+  const dx = a.x - b.x;
+  return dx ? dx : a.y - b.y;
+}
+
+/**
+ * Test the point against existing hull points.
+ * @parma {PIXI.Point[]} hull
+ * @param {PIXI.Point} point
+*/
+function testHullPoint(hull, p) {
+  while ( hull.length >= 2 ) {
+    const q = hull[hull.length - 1];
+    const r = hull[hull.length - 2];
+    // TO-DO: Isn't this a version of orient2d? Replace?
+    if ( Point.cOrient(p, q, r) >= 0 ) hull.pop();
+    // if ( (q.x - r.x) * (p.y - r.y) >= (q.y - r.y) * (p.x - r.x) ) hull.pop();
+    else break;
+  }
+  hull.push(p);
 }
 
 export class Ellipse2d extends Polygon2d {
