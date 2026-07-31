@@ -49,10 +49,11 @@ export class Point2d extends HPoint2d {
    * @param {Point2d} c
    * @returns {number}
    */
-  static orient(a, b, c) {
-    using l = Line2d.fromPoints(a, b)
-    return l.orient(c);
-  }
+  static orient = this.scalarTriple;
+
+    // orient is Equivalent to scalar triple:
+    // using l = Line2d.fromPoints(a, b)
+    // return l.orient(c);
 
   /**
    * Cross two axes of two points
@@ -374,31 +375,29 @@ export class Segment2d {
   }
   
   /**
-   * Quickly test whether the line segment AB intersects with the line segment CD.
-   * This method does not determine the point of intersection, for that use lineLineIntersection.
-   * @param {Segment2d} other                   Segment c|d to test
+   * Quickly test whether the line segment a|b intersects with the line segment c|d.
+   * This method does not determine the point of intersection, for that use intersection.
+   * @param {Segment2d} other           Segment c|d to test
    * @returns {boolean}                 Do the line segments intersect?
    */
-  lineSegmentIntersects(other) {
-    // TODO: better to use orientation test?
-  /*
-  // First test the orientation of A and B with respect to CD to reject collinear cases
-  const xa = foundry.utils.orient2dFast(a, b, c);
-  const xb = foundry.utils.orient2dFast(a, b, d);
-  if ( !xa && !xb ) return false;
-  const xab = (xa * xb) <= 0;
+  intersects(other) {
+    // First test the orientation of A|B with respect to points c and d to reject collinear cases
+    const ab = this.line;
+    const xc = ab.orient(other.a);
+    const xd = ab.orient(other.b);
 
-  // Also require an intersection of CD with respect to AB
-  const xcd = (foundry.utils.orient2dFast(c, d, a) * foundry.utils.orient2dFast(c, d, b)) <= 0;
-  return xab && xcd;
-  */
-}
+    if ( !xc && !xd ) return false;
+    const xcd = (xc * xd) <= 0;
+
+    // Also require an intersection of c|d with respect to points a and b
+    const cd = other.line;
+    const xa = cd.orient(this.a);
+    const xb = cd.orient(this.b);
+    const xab = (xa * xb) <= 0;
+    return xab && xcd;
+  }
 }
 
-
-function orient2dFast(a, b, c) {
-  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
-}
 
 
 
