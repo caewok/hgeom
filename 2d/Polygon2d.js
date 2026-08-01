@@ -714,15 +714,93 @@ export class Circle2d extends Ellipse2d {
   };
   
   /**
-   * Approximate this PIXI.Circle as a PIXI.Polygon
+   * Approximate this circle as a polygon. 
    * @param {object} [options]      Options forwarded on to the pointsForArc method
    * @returns {PIXI.Polygon}        The Circle expressed as a PIXI.Polygon
    */
-  PIXI.Circle.prototype.toPolygon = function(options) {
+  toPolygon(options) {
     const points = this.pointsForArc(0, 0, options);
     points.pop(); // Drop the repeated endpoint
     return new PIXI.Polygon(points);
   };
+  
+  /**
+ * Test if any segment in an array crosses a polygon edge
+ * @param {Segment2d[]} segments    Array of lines
+ * @returns {boolean}
+ */
+ segmentsCross(segments) {
+  for ( const edge of this.iterateEdges() ) {
+    for ( const segment of segments ) {
+      if ( segment.segmentCrosses(edge) ) return true;
+    }
+  }
+  return false;
+}
+
+  /**
+ * Can this polygon be triangulated using a fan?
+ * @param {PIXI.Point} centroid       Assumed center point
+ * @returns {boolean}
+ */
+ canUseFanTriangulation(centroid) {
+  centroid ??= this.center;
+  if ( !this.contains(centroid) ) return false;
+  const segments = this.iteratePoints().map(b => Segment.withPoints(centroid, b));
+  return !this.segmentsCross(segments); // Lines cross ignores lines that only share endpoints.
+}
+
+/**
+ * Triangulate the polygon.
+ * @param {useFan} [useFan]    Use fan algorithm to triangulate if possible. Only works if the lines don't cross.
+ *   True forces the fan and does not check
+ * @returns {Triangle2d[]} Array of triangle polygons
+ */
+triangulate({ useFan, centroid } = {}) {
+  const pts = this.points;
+  centroid ??= this.center;
+  if ( typeof useFan === "undefined" ) useFan = this.canUseFanTriangulation(centroid);
+  if ( useFan ) {
+    const polys = new Array(this.points.length);
+    let j = 0;
+    for ( const edge of this.iterateEdges() ) {
+      polys[j++] = Triangle2d.fromPoints(center, edge.a, edge.b);
+    }
+    return polys;
+  }
+
+  // Use earcut.
+  const indices = PIXI.utils.earcut(pts.flatMap(pt => [pt.x, pt.y]);
+  const ln = indices.length;
+  const polys = new Array((pts.length * 2) / 3);
+  for ( let i = 0, j = 0; i < ln; ) {
+    const idx0 = indices[i++];
+    const idx1 = indices[i++];
+    const idx2 = indices[i++];
+    polys[j++] = Polygon2d.fromPoints([
+      pts[idx0],
+      pts[idx1],
+      pts[idx2],
+    ];
+  }
+  return polys;
+}
+
+/**
+ * Create a grid of points within this polygon.
+ * @param {object} [opts]
+ * @param {number} [opts.spacing = 1]              How many pixels between each point?
+ * @param {boolean} [opts.startAtEdge = false]     Are points allowed within spacing of the edges? Otherwise will be at least spacing away.
+ * @returns {PIXI.Point[]} Points in order from left to right, top to bottom.
+ */
+function pointsLattice({ spacing = 1, startAtEdge = false } = {}) {
+  const poly = startAtEdge ? this : this.clone().pad(-spacing);
+  const bounds = poly.aabb;
+  const pts = bounds.pointsLattice({ spacing, startAtEdge: true }); // Start at edge b/c already padded the polygon.
+
+  // For arbitrary polygon, unfortunately, have to test the bounds for each.
+  return pts.filter(pt => this.contains(pt));
+}
 
 }
 
