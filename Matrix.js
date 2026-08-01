@@ -689,10 +689,12 @@ class MatrixAbstract {
   /**
    * Rotation matrix for a given angle, rotating around X axis.
    * @param {number} angle          Radians
-   * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
+   * @param {object} [opts]
+   * @param {boolean} [opts.d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
+   * @param {Matrix} [opts.out]
    * @returns {Matrix}
    */
-  static rotationX(angle, d3 = true, out) {
+  static rotationX(angle, { d3 = true, out } = {}) {
     const n = 3 + d3;
     out ||= this.empty(n);
     out.identity();
@@ -727,10 +729,11 @@ class MatrixAbstract {
   /**
    * Rotation matrix for a given angle, rotating around Y axis.
    * @param {number} angle          Radians
-   * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
+   * @param {object} [opts]
+   * @param {boolean} [opts.d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationY(angle, d3 = true, out) {
+  static rotationY(angle, { d3 = true, out } = {}) {
     const n = 3 + d3;
     out ||= this.empty(n);
     out.identity();
@@ -764,10 +767,11 @@ class MatrixAbstract {
   /**
    * Rotation matrix for a given angle, rotating around Z axis.
    * @param {number} angle
-   * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
+   * @param {object} [opts]
+   * @param {boolean} [opts.d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationZ(angle, d3 = true, out) {
+  static rotationZ(angle, { d3 = true, out } = {}) {
     const n = 3 + d3;
     out ||= this.empty(n);
     out.identity();
@@ -800,13 +804,16 @@ class MatrixAbstract {
 
   /**
    * Combine rotation matrixes for x, y, and z.
-   * @param {number} angleX   Radians
-   * @param {number} angleY   Radians
-   * @param {number} angleZ   Radians
-   * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
+   * @param {object} angles   Object with x, y, or z radian angles
+   * @param {object} [opts]
+   * @param {boolean} [opts.d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationXYZ(angleX, angleY, angleZ, d3 = true, out) {
+  static rotationXYZ(angles, { d3 = true, out } = {}) {
+    const angleX = angles.x;
+    const angleY = angles.y;
+    const angleZ = angles.z;
+    
     out = angleX ? this.rotationX(angleX, d3, out) : angleY
       ? this.rotationY(angleY, d3, out) : angleZ
         ? this.rotationZ(angleZ, d3, out) : out.identity();
@@ -823,7 +830,10 @@ class MatrixAbstract {
     return out;
   }
 
-  static translation(x = 0, y = 0, z, out) {
+  static translation(values, out) {
+    const x = values.x || 0;
+    const y = values.y || 0;
+    const z = values.z;
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();
@@ -845,7 +855,10 @@ class MatrixAbstract {
     return out;
   }
 
-  static scale(x = 1, y = 1, z, out) {
+  static scale(dims, out) {
+    const x = dims.x || 1;
+    const y = dims.y || 1;
+    const z = dims.z;
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();
@@ -859,10 +872,41 @@ class MatrixAbstract {
     [0, 0, z, 0],
     [0, 0, 0, 1]
     */
-   out.setIndex(0, 0, x);
-   out.setIndex(1, 1, y);
-   if ( typeof z !== "undefined" ) out.setIndex(2, 2, z);
-   return out;
+    out.setIndex(0, 0, x);
+    out.setIndex(1, 1, y);
+    if ( typeof z !== "undefined" ) out.setIndex(2, 2, z || 1);
+    return out;
+  }
+  
+  /**
+   * Multiple transforms. 
+   * @param {object} [opts]
+   * @param {object} [opts.angles]
+   * @param {object} [opts.dims]
+   * @param {object} [opts.center]
+   * @param {object} [opts.d3=true]
+   * @returns {Matrix}
+   */
+  static modelTransform({ angles, dims, center, d3=true, out } = {}) {
+    const n = d3 ? 4 : 3;
+    out ||= this.empty(n);
+    out.identity();
+    const multFn = d3 ? "multiply4x4" : "multiply3x3";
+    
+    using txMat = this.empty(n);
+    if ( dims ) {
+      this.scale(dims, txMat);
+      out[multFn](txMat, out);
+    }
+    if ( angles ) {
+      this.rotationXYZ(angles, { d3 , out: txMat });
+      out[multFn](txMat, out); 
+    }
+    if ( center ) {
+      this.translate(center, txMat);
+      out[multFn](txMat, out);
+    }
+    return out;
   }
 
   /**
