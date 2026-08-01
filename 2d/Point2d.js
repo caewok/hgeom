@@ -257,6 +257,15 @@ export class Ray2d {
     return t < 0 ? null : t;
   }
   
+  /**
+   * Does the ray intersect with a line. 
+   * @param {Line2d} l
+   * @returns {boolean}
+   */
+  intersectsLine(l) {
+    
+  }
+  
 }
 
 export class Segment2d {
@@ -422,6 +431,23 @@ export class Segment2d {
     const xb = cd.orient(this.b);
     const xab = (xa * xb) <= 0;
     return xab && xcd;
+  }
+  
+  /**
+   * Does the segment intersect with a line?
+   * @param {Line2d} l
+   * @returns {boolean}
+   */
+  intersectsLine(l) {
+    const dotA = l.dot(this.a);
+    const dotB = l.dot(this.b);
+    
+    // Normalize the signs. 
+    const signA = Math.sign(a.w) * dotA;
+    const signB = Math.sign(b.w) * dotB;
+    
+    // Opposite sides: product is negative. Collinear if 0. 
+   return (signA * signB) <= 0;
   }
 }
 
