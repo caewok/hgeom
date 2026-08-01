@@ -510,10 +510,10 @@ function testHullPoint(hull, p) {
 
 export class Ellipse2d extends Polygon2d {
   /** @type {number} */
-  semiMajor = 0;
+  semiMajor = 1;
 
   /** @type {number} */
-  semiMinor = 0;
+  semiMinor = 1;
   
   /** @type {number<radians>} */
   rotation = 0;
@@ -548,7 +548,7 @@ export class Ellipse2d extends Polygon2d {
    * @param {number} [rotation=0]
    * @returns {Ellipse2d}
    */
-  static create(center, { semiMajor = 0, semiMinor = 0, width, height, rotation = 0 } = {}) {
+  static create(center, { semiMajor = 1, semiMinor = 1, width, height, rotation = 0 } = {}) {
     const ellipse = new this();
     ellipse.center.copyFrom(center);
     ellipse.rotation = rotation;
@@ -567,34 +567,26 @@ export class Ellipse2d extends Polygon2d {
    * @returns {Polygon2d}
    */
   toPolygon() {
-    
+    const density = Circle3d.approximateVertexDensity(Math.max(this.semiMajor, this.semiMinor));
+    const cir = new Circle3d();
+    using M = this.fromUnitCircleMatrix();
+    const poly = cir.toPolygon({ density });
+    poly.iteratePoints().forEach(pt => pt.transform(M));
+    return poly;
   }
   
   /**
    * Calculate a conversion matrix to transform points from unit circle to this ellipse. 
    * @param {Point2d} pt				Converted in place
-   * @returns {Matrix} 
+   * @returns {Matrix<3x3>} 
    */
   fromUnitCircleMatrix() {
-    
+    const d3 = false;
+    const center = this.center;
+    const angles = { z: this.rotation };
+    const dims = { x: this.semiMajor, y: this.semiMinor };
+    return Matrix.modelTransform({ center, angles, dims, d3 });
   }
-  
-
-
-  /* -------------------------------------------- */
-
-  
-  /**
-   * Approximate this PIXI.Circle as a PIXI.Polygon
-   * @param {object} [options]      Options forwarded on to the pointsForArc method
-   * @returns {PIXI.Polygon}        The Circle expressed as a PIXI.Polygon
-   */
-  PIXI.Circle.prototype.toPolygon = function(options) {
-    const points = this.pointsForArc(0, 0, options);
-    points.pop(); // Drop the repeated endpoint
-    return new PIXI.Polygon(points);
-  };
-
 }
 
 export class Circle2d extends Ellipse2d {
@@ -719,6 +711,17 @@ export class Circle2d extends Ellipse2d {
     const fromAngle = Math.atan2(deltaA.y, deltaA.x);
     const toAngle = Math.atan2(deltaB.y, deltaB.x);
     return this.pointsForArc(fromAngle, toAngle, { includeEndpoints: false, ...options });
+  };
+  
+  /**
+   * Approximate this PIXI.Circle as a PIXI.Polygon
+   * @param {object} [options]      Options forwarded on to the pointsForArc method
+   * @returns {PIXI.Polygon}        The Circle expressed as a PIXI.Polygon
+   */
+  PIXI.Circle.prototype.toPolygon = function(options) {
+    const points = this.pointsForArc(0, 0, options);
+    points.pop(); // Drop the repeated endpoint
+    return new PIXI.Polygon(points);
   };
 
 }
