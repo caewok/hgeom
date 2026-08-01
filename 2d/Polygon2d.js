@@ -476,7 +476,23 @@ convexHull() {
     return false;
   }
   
+  /**
+   * Test whether a line intersects this polygon. 
+   * @param {Line2d} l
+   * @returns {boolean} True if line intersects. 
+   */
+  lineIntersects(l) {
+    
+  }
   
+  /**
+   * Test whether a ray intersects this polygon. 
+   * @param {Ray2d} r
+   * @returns {boolean} True if line intersects. 
+   */
+  rayIntersects(r, { inside = false } = {}) {
+    
+  }
 
 }
 
