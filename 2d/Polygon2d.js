@@ -1,4 +1,4 @@
-/* globals
+l/* globals
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -510,6 +510,9 @@ export class Ellipse2d extends Polygon2d {
 
   /** @type {number} */
   semiMinor = 0;
+  
+  /** @type {number<radians>} */
+  rotation = 0;
 
   get width() { return this.semiMajor; }
 
