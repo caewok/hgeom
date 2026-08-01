@@ -570,6 +570,15 @@ export class Ellipse2d extends Polygon2d {
     
   }
   
+  /**
+   * Calculate a conversion matrix to transform points from unit circle to this ellipse. 
+   * @param {Point2d} pt				Converted in place
+   * @returns {Matrix} 
+   */
+  fromUnitCircleMatrix() {
+    
+  }
+  
 
 
   /* -------------------------------------------- */
