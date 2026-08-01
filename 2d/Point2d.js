@@ -220,10 +220,6 @@ export class Ray2d {
     const v1 = Point2d.orient(this.origin, this.direction, s.a);
     const v2 = Point2d.orient(this.origin, this.direction, s.a);
     
-    // Evaluate which side of the segment lies the ray origin and direction
-    const v3 = s.line.orient(this.origin);
-    const v4 = s.line.orient(this.direction);
-    
     // Edge case: Segment and ray are collinear. 
     if ( v1.almostEqual(0) && v2.almostEqual(0) ) {
       // Project a and b onto ray direction, relative to origin
@@ -240,8 +236,13 @@ export class Ray2d {
     // Check for opposite signs. 
     // Use boolean logic instead of multiplying to avoid floating point overflow.  
     const crossesRay = (v1 <= 0 && v2 >= 0) || (v1 >= 0 && v2 <= 0);
+    if ( !crossesRay ) return false;
+
+    // Evaluate which side of the segment lies the ray origin and direction
+    const v3 = s.line.orient(this.origin);
+    const v4 = s.line.orient(this.direction);
     const pointsTowardSegment = (v3 <= 0 && v4 >= 0) || (v3 >= 0 && v4 <= 0);
-    return crossesRay && pointsTowardSegment;
+    return pointsTowardSegment;
   }
   
   /**
