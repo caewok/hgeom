@@ -173,10 +173,14 @@ export class Polygon2d {
   get aabb() {
     if ( this.#dirtyAABB ) {
       this.#aabb ??= AABB2d.newInstance;
-      AABB2d.fromPolygon(this, this.#aabb);
+      this._calculateAABB(this.#aabb);
       this.#dirtyAABB = false;
     }
     return this.#aabb;
+  }
+  
+  _calculateAABB(aabb) {
+    AABB2d.fromPolygon(this, aabb);
   }
 
   // ----- NOTE: Centroid calculation ----- //
@@ -449,7 +453,7 @@ convexHull() {
     using dir = Point2d.build(1, 1e-06, 0); // use a slight angle to avoid passing exactly theiughs vertex..
     const r = new Ray2d(pt, dir);
     for ( const edge of this.iterateEdges() {
-       if ( ray.intersectsSegment(edge) ) inside != inside;
+       if ( r.intersectsSegment(edge) ) inside != inside;
     }
     return inside;
   }
@@ -514,18 +518,42 @@ export class Ellipse2d extends Polygon2d {
   /** @type {number<radians>} */
   rotation = 0;
 
+  /**
+   * Longest diameter.
+   * @type {number}
+   */
   get width() { return this.semiMajor; }
 
   get height() { return this.semiMinor; }
 
-  get a() { return this.semiMajor; }
-
-  get b() { return this.semiMinor; }
 
   /** @type {Point2d} */
   get center() { return this.points[0]; }
 
   constructor() { super(1); }
+  
+  /**
+   * Create a new ellipse.
+   * @param {Point2d} center
+   * @param {object} opts
+   * @param {number} [semiMajor=0]
+   * @param {number} [semiMinor=0]
+   * @param {number} [width=0]
+   * @param {number} [height=0]
+   * @param {number} [rotation=0]
+   * @returns {Polygon2d}
+   */
+  static create(center, { semiMajor = 0, semiMinor = 0, width, height, rotation = 0 } = {}) {
+    const ellipse = new this();
+    ellipse.center.copyFrom(center);
+    ellipse.rotation = 0;
+    if ( width ) this.width = width;
+    else this.semiMajor = semiMajor;
+    if ( height ) this.height = height;
+    else semiMinor = semiMinor;
+    return ellipse;
+  }
+
 }
 
 export class Circle2d extends Ellipse2d {
