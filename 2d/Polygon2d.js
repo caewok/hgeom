@@ -587,6 +587,49 @@ export class Ellipse2d extends Polygon2d {
     const dims = { x: this.semiMajor, y: this.semiMinor };
     return Matrix.modelTransform({ center, angles, dims, d3 });
   }
+  
+  // ----- NOTE: Iterators ----- //
+
+  /**
+   * Iterate the edges of this polygon.
+   * @yield {Segment}            Two points of the polygon; not copied.
+   * For efficiency, the edge between the last point and the first point will be iterated first.
+   */
+  *iterateEdges(opts) {
+    using poly = this.toPolygon(opts);
+    yield* poly.iterateEdges();
+  }
+
+  /**
+   * Iterate the points of this polygon.
+   * @yield {Point2d}       Point of the polygon, not copied.
+   */
+  *iteratePoints(opts) { 
+    using poly = this.toPolygon(opts);
+    yield* poly.iteratePoints();
+  }
+
+  /**
+   * Iterate the edges of this polygon in reverse order.
+   * @yield {object}            Two points of the polygon; not copied.
+   *   - @prop {Point2d} a
+   *   - @prop {Point2d} b
+   * For efficiency, the edge between the first point and the last point will be iterated first.
+   */
+  *reverseIterateEdges(opts) {
+    using poly = this.toPolygon(opts);
+    yield* poly.reverseIterateEdges();
+  }
+
+  /**
+   * Iterate the points of this polygon, in reverse order.
+   * @yield {Point2d}       Point of the polygon, not copied.
+   */
+  *reverseIteratePoints(opts) {
+    using poly = this.toPolygon(opts);
+    yield* poly.reverseIteratePoints();
+  }
+
 }
 
 export class Circle2d extends Ellipse2d {
