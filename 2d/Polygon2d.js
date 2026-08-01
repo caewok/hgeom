@@ -522,13 +522,18 @@ export class Ellipse2d extends Polygon2d {
    * Longest diameter.
    * @type {number}
    */
-  get width() { return this.semiMajor; }
+  get width() { return this.semiMajor * 2; }
+  
+  set width(value) { this.semiMajor = value / 2; }
 
-  get height() { return this.semiMinor; }
-
+  get height() { return this.semiMinor * 2; }
+  
+  set height(value) { return this.semiMinor = value / 2; }
 
   /** @type {Point2d} */
   get center() { return this.points[0]; }
+  
+  set center(value) { this.points[0].copyFrom(value); }
 
   constructor() { super(1); }
   
@@ -541,18 +546,45 @@ export class Ellipse2d extends Polygon2d {
    * @param {number} [width=0]
    * @param {number} [height=0]
    * @param {number} [rotation=0]
-   * @returns {Polygon2d}
+   * @returns {Ellipse2d}
    */
   static create(center, { semiMajor = 0, semiMinor = 0, width, height, rotation = 0 } = {}) {
     const ellipse = new this();
     ellipse.center.copyFrom(center);
-    ellipse.rotation = 0;
+    ellipse.rotation = rotation;
     if ( width ) this.width = width;
     else this.semiMajor = semiMajor;
     if ( height ) this.height = height;
     else semiMinor = semiMinor;
     return ellipse;
   }
+  
+  // ----- NOTE: Polygon conversion ----- //
+  
+  /**
+   * Convert this ellipse to a polygon. 
+   * @param {number} [density]
+   * @returns {Polygon2d}
+   */
+  toPolygon() {
+    
+  }
+  
+
+
+  /* -------------------------------------------- */
+
+  
+  /**
+   * Approximate this PIXI.Circle as a PIXI.Polygon
+   * @param {object} [options]      Options forwarded on to the pointsForArc method
+   * @returns {PIXI.Polygon}        The Circle expressed as a PIXI.Polygon
+   */
+  PIXI.Circle.prototype.toPolygon = function(options) {
+    const points = this.pointsForArc(0, 0, options);
+    points.pop(); // Drop the repeated endpoint
+    return new PIXI.Polygon(points);
+  };
 
 }
 
@@ -572,6 +604,20 @@ export class Circle2d extends Ellipse2d {
   constructor() {
     super(1);
   }
+  
+  /**
+   * Create a new circle.
+   * @param {Point2d} center
+   * @param {number} radius
+   * @returns {Circle2d}
+   */
+  static create(center, radius = 0) {
+    const circle = new this();
+    circle.center.copyFrom(center);
+    circle.radius = radius;
+    return circle;
+  }
+  
 
   // ----- NOTE: PIXI conversion ----- //
 
@@ -583,6 +629,89 @@ export class Circle2d extends Ellipse2d {
   fromPIXI(pixiCircle) {
     // TODO: Implement.
   }
+  
+  /**
+   * Get the points that would approximate a circular arc along this circle, given a starting and ending angle.
+   * Points returned are clockwise. If from and to are the same, a full circle will be returned.
+   * @param {number} fromAngle     Starting angle, in radians. π is due north, π/2 is due east
+   * @param {number} toAngle       Ending angle, in radians
+   * @param {object} [options]     Options which affect how the circle is converted
+   * @param {number} [options.density]           The number of points which defines the density of approximation
+   * @param {boolean} [options.includeEndpoints]  Whether to include points at the circle where the arc starts and ends
+   * @returns {Point2d[]}             An array of points along the requested arc
+   */
+  pointsForArc = function(fromAngle, toAngle, { density, includeEndpoints = true } = {}) {
+    const pi2 = 2 * Math.PI;
+    density ??= this.constructor.approximateVertexDensity(this.radius);
+    
+    // Determine number of points to add
+    let dAngle = toAngle - fromAngle;
+    while ( dAngle <= 0 ) dAngle += pi2; // Angles may not be normalized, so normalize total.
+    const nPoints = Math.round(dAngle / delta);
+    const points = Point2d.allocateNObjects(nPoints + (2 * includeEndpoints));
+    
+    let i = 0;
+    if ( includeEndpoints ) this.pointAtAngle(fromAngle, points[i++]);
+    
+    // Construct padding rays (clockwise)
+    const delta = pi2 / density;
+    for ( let j = 0; j < nPoints; j++ ) this.pointAtAngle(fromAngle + (j * delta)), points[i++]);
+    if ( includeEndpoints ) this.pointAtAngle(fromAngle, points[i++]);
+    return points;
+  };
+
+  /**
+   * The recommended vertex density for the regular polygon approximation of a circle of a given radius.
+   * Small radius circles have fewer vertices. The returned value will be rounded up to the nearest integer.
+   * See the formula described at:
+   * https://math.stackexchange.com/questions/4132060/compute-number-of-regular-polgy-sides-to-approximate-circle-to-defined-precision
+   * @param {number} radius     Circle radius
+   * @param {number} [epsilon]  The maximum tolerable distance between an approximated line segment and the true radius.
+   *                            A larger epsilon results in fewer points for a given radius.
+   * @returns {number}          The number of points for the approximated polygon
+   */
+  static approximateVertexDensity = function(radius, epsilon = 1) {
+    return Math.ceil(Math.PI / Math.sqrt(2 * (epsilon / radius)));
+  };
+
+  /**
+   * Calculate an x,y point on this circle's circumference given an angle
+   * 0: due east
+   * π / 2: due south
+   * π or -π: due west
+   * -π/2: due north
+   * @param {number} angle      Angle of the point, in radians
+   * @param {Point2d} [out]      Where to store the result
+   * @returns {Point2d}         The point on the circle at the given angle
+   */
+  pointAtAngle = function(angle, out) {
+    const { center, radius } = this;
+    out ??= Point2d.newInstance();
+    out.set(
+      center.x + (radius * Math.cos(angle)),
+      center.y + (radius * Math.sin(angle)),
+    );
+  };
+
+  /**
+   * Get all the points for a polygon approximation of this circle between two points.
+   * The two points can be anywhere in 2d space. The intersection of this circle with the line from this circle center
+   * to the point will be used as the start or end point, respectively.
+   * This is used to draw the portion of the circle (the arc) between two intersection points on this circle.
+   * @param {Point2d} a             Point in 2d space representing the start point
+   * @param {Point2d} b             Point in 2d space representing the end point
+   * @param {object} [options]    Options passed on to the pointsForArc method
+   * @returns { Point2d[]}          An array of points arranged clockwise from start to end
+   */
+  pointsBetween = function(a, b, options) {
+    const center = this.center;
+    using deltaA = a.clone().subtract(center);
+    using deltaB = b.clone().subtract(center);
+    const fromAngle = Math.atan2(deltaA.y, deltaA.x);
+    const toAngle = Math.atan2(deltaB.y, deltaB.x);
+    return this.pointsForArc(fromAngle, toAngle, { includeEndpoints: false, ...options });
+  };
+
 }
 
 export class Triangle2d extends Polygon2d {
