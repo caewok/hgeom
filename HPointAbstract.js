@@ -1,4 +1,4 @@
-/* globals
+i/* globals
 HGEOM,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -81,7 +81,6 @@ export class PointArray {
    * @returns {HPointArray} The out object
    */
   clone(out) {
-    if ( out === this ) return out;
     out ||= this.constructor.create(this.NDIMS);
     out.arr.set(this.arr);
     return out;
@@ -146,49 +145,73 @@ export class PointArray {
 
   /**
    * Add a vector to this one, elementwise.
-   * @param {PointArrayAbstract} p1      The vector to add
-   * @param {PointArrayAbstract} p2      The other vector to add
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to add
+   * @param {PointArrayAbstract} ...      The other vectors to add
    * @returns {PointArrayAbstract}
    */
-  static add(p1, p2, out) {
+  static add(out, p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    const b = p2.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] + b[i];
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i];
+      for ( const pt of pts ) out.arr[i] += pts.arr[i];
+    }
     return out;
   }
 
   /**
    * Subtract a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} p1      The vector to subtract from
-   * @param {PointArrayAbstract} p2      The other vector to subtract
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to subtract from
+   * @param {PointArrayAbstract} ...      The other vectors to subtract
    * @returns {PointArrayAbstract}
    */
-  static subtract(p1, p2, out) {
+  static subtract(out, p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    const b = p2.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] - b[i];
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i];
+      for ( const pt of pts ) out.arr[i] -= pt;
+    }
     return out;
   }
 
   /**
    * Multiply a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} p1      The vector to multiply
-   * @param {PointArrayAbstract} p2      The other vector to multiply with
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to multiply
+   * @param {PointArrayAbstract} ...      The other vectors to multiply with
    * @returns {PointArrayAbstract}
    */
-  static multiply(p1, p2, out) {
+  static multiply(out, p1, ...pts) {
     const nDims = p1.DIMS;
     out ||= this.create(nDims);
     const a = p1.arr;
-    const b = p2.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i] * b[i];
+      for ( const pt of pts ) out.arr[i] *= pt;
+    }
+    return out;
+  }
+  
+  /**
+   * Divide a point vector to this one, elementwise.
+   * @param {PointArrayAbstract} [out]   The object in which to store the result.
+   * @param {PointArrayAbstract} p1      The vector to divide
+   * @param {PointArrayAbstract} ...      The other vectors to divide with
+   * @returns {PointArrayAbstract}
+   */
+  static divide(out, p1, ...pts) {
+    const nDims = p1.DIMS;
+    out ||= this.create(nDims);
+    const a = p1.arr;
+    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
+      out.arr[i] = a[i] * b[i];
+      for ( const pt of pts ) out.arr[i] /= pt;
+    }
     return out;
   }
 
@@ -232,29 +255,14 @@ export class PointArray {
     const nDims = p.DIMS;
     out ||= this.create(nDims);
     const a = p.arr;
+    const w = a[nDims];
     let denom = 1;
     for ( let i = 0; i < nDims; i += 1 ) {
-      out.arr[i] = a[nDims];
+      out.arr[i] = w;
       denom *= a[i];
     }
     out.w = denom;
     return out;
-  }
-
-  /**
-   * Divide a point by another.
-   * @param {PointArrayAbstract} p      The vector to divide
-   * @param {PointArrayAbstract} other      The other vector to divide by
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static divide(p1, p2, out) {
-    // [x,y,w]/[x',y',w'] = [x/x', y/y', w/w'] = [x/x' / w/w', y/y' / w/w', 1]
-    //   = [x*w' / x'*w, y*w' / y'*w, 1] = [(x*w')*(y'*w) / (x'*w) * (y'*w), (y*w')*(x'*w)/(x'*w) * (y'*w), 1]
-    //   = [(x*w')*(y'*w), (y*w')*(x'*w), (x'*w) * (y'*w)]
-    // Or [x,y,w] * (1/[x',y',w']) = [x,y,w] * [w', w', x'*y'] = [x*w', y*w', w*x'*y']
-    this.invert(p2, out);
-    return this.multiply(p1, out, out);
   }
 
   /**
@@ -567,10 +575,10 @@ export class PointArray {
    * Vector + Vector = Vector
    * Vector + Point = Point
    * @param {PointArrayAbstract} other  Point to add to this one
-   * @param {PointArrayAbstract} out    Where to store the result
+   * @param {PointArrayAbstract} ...    Additional points to add to this one
    * @returns {PointArrayAbstract}
    */
-  add(other, out) { return this.constructor.add(this, other, out); }
+  add(other, ...pts) { return this.constructor.add(this, this, other, ...pts); }
 
   /**
    * Subtract a point/vector from another point/vector.
@@ -580,23 +588,26 @@ export class PointArray {
    * Vector - Vector = Vector
    * Vector - Point = Point (-w in most cases)
    * @param {PointArrayAbstract} other  Point to subtract from this one
-   * @param {PointArrayAbstract} out    Where to store the result
+   * @param {PointArrayAbstract} ... Additional points to subtract from this one
    * @returns {PointArrayAbstract}
    */
-  subtract(other, out) {
-    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, other, out);
+  subtract(other, ...pts) {
+    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, this, other, ...pts);
 
     // GCD
     // Like cSubtract, but skipping a few steps.
+    if ( pts.length ) {
+      [other, ...pts].forEach(pt => this.subtract(pt);
+      return this;
+    }
     const nDims = this.DIMS;
-    out ||= this.constructor.create(nDims);
     const a = this.arr;
     const b = other.arr;
     const m1 = this.w;
     const m2 = other.w;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
+    for ( let i = 0, n = nDims; i < n; i += 1 ) this.arr[i] = (a[i] * m2) - (b[i] * m1);
+    return this;
     out.w = 0;
-    return  out;
   }
 
   /**
@@ -604,10 +615,9 @@ export class PointArray {
    * Note that has no real effect on points because dividing by w cancels it out.
    * It does scale vectors.
    * @param {PointArrayAbstract} c          The scalar to multiply
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  scale(c, out) { return this.constructor.multiplyScalar(this, c, out); }
+  scale(c) { return this.constructor.multiplyScalar(this, c, this); }
 
   /**
    * Apply a function elementwise to each coordinate, including w.
@@ -615,17 +625,17 @@ export class PointArray {
    * - @param {number} value
    * - @param {number} index
    * - @param {number} w value
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  applyElementWise(callback, out) {
-    const nDims = this.DIMS;
-    out ||= this.constructor.create(nDims);
-    const a = this.arr;
-    const w = this.w;
+  static applyElementWise(pt, callback, out) {
+    const nDims = pt.DIMS;
+    out ||= pt.constructor.create(nDims);
+    const a = pt.arr;
+    const w = pt.w;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
-  }
+
+  applyElementWise(callback) { return this.constructor.applyElementWise(this, callback, this); }
 
   /**
    * Apply a function elementwise to each coordinate, except w.
@@ -636,14 +646,16 @@ export class PointArray {
    * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  applyCoordinateWise(callback, out) {
-    const nDims = this.DIMS;
-    out ||= this.constructor.create(nDims);
-    const a = this.arr;
-    const w = this.w;
+  static applyCoordinateWise(pt, callback, out) {
+    const nDims = pt.DIMS;
+    out ||= pt.constructor.create(nDims);
+    const a = pt.arr;
+    const w = pt.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
   }
+  
+  applyCoordinateWise(callback) { return this.constructor.applyCoordinateWise(this, callback, this); }
 
   // ----- NOTE: Equality ----- //
 
@@ -688,17 +700,20 @@ export class PointArray {
 
   /**
    * Multiply this point by a matrix.
+   * @param {PointArray} pt
    * @param {Matrix} M
    * @param {PointArray} [out]
    * @returns {PointArray}
    */
-  transform(M, out) {
+  static transform(pt, M, out) {
     out ||= this.constructor.create(this.DIMS);
-    const mPoint = HGEOM.Matrix.fromHPoint(this);
-    const mOut = HGEOM.Matrix.fromHPoint(out); // Will share the array.
+    using mPoint = Matrix.fromHPoint(this);
+    using mOut = Matrix.fromHPoint(out); // Will share the array.
     mPoint.multiply(M, mOut);
     return out;
   }
+  
+  transform(M) { return this.constructor.transform(this, M, this); }
 
   // ----- NOTE: Vectorize ----- //
 
@@ -744,12 +759,11 @@ export class PointArray {
    * @param {HPointAbstrat} out
    * @returns {HPointArray} out  This point with w set to 1.
    */
-  perspectiveDivide(out) {
+  perspectiveDivide() {
     if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
     out ||= this.constructor.newInstance;
-    this.clone(out);
-    out.multiplyScalar(1/out.w);
-    return out;
+    this.multiplyScalar(1/this.w);
+    return this;
   }
   
 	/**
@@ -826,17 +840,15 @@ export class PointArray {
   /**
    * Normalize by dividing this vector by the magnitude.
    * Only well-defined for vectors.
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  normalize(out) { return this.constructor.divideScalar(this, this.magnitude(), out); }
+  normalize() { return this.constructor.divideScalar(this, this.magnitude(), this); }
 
   /**
    * Use the cartesian magnitude to normalize.
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
    * @returns {PointArrayAbstract}
    */
-  cNormalize(out) { return this.constructor.cDivideScalar(this, this.cMagnitude(), out); }
+  cNormalize() { return this.constructor.cDivideScalar(this, this.cMagnitude(), this); }
 
   // ----- NOTE: Static Cross ----- //
 
@@ -947,7 +959,7 @@ export class PointArray {
     const ab = this.dot(a, b);
     using scaledB = this.multiplyScalar(b, ac)
     using scaledC = this.multiplyScalar(c, ab);
-    return this.subtract(scaledB, scaledC, out);
+    return this.subtract(out, scaledB, scaledC);
   }
 
   /**

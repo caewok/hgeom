@@ -30,7 +30,7 @@ export class Polygon3d {
   // TODO: Is it worth storing lines for polygon edges? Maybe cached? Or vectors?
 
   constructor(n = 3) {
-    this.points.length = n;
+    this.points = Point3d.allocateNObjects(n);
   }
 
   [Symbol.dispose]() { this.release(); }

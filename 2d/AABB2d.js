@@ -181,6 +181,23 @@ export class AABB2d extends AABB {
     return out;
   }
 
+  // ----- NOTE: Methods ----- //
+
+  /**
+   * Make the bounds finite.
+   * @returns {AABB2d}
+   */
+  makeFinite() {
+    const { min, max } = this;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      if ( !Number.isFinite(max.arr[i]) ) max.arr[i] = Number.MAX_SAFE_INTEGER;
+      if ( !Number.isFinite(min.arr[i]) ) min.arr[i] = Number.MIN_SAFE_INTEGER;
+    }
+    min.w = 1;
+    max.w = 1;
+    return this;
+  }
+
   // ----- NOTE: Overlap and contains methods ---- //
 
   /**
@@ -192,5 +209,91 @@ export class AABB2d extends AABB {
     using pt = Point2d.build(x, y);
     return this.containsPoint(pt);
   }
+
+  /**
+   * Does this bounding box contain the point?
+   * @param {Point2d} p
+   * @param {number} [epsilon=1e-06]        How close to min/max for the point to count as contained
+   * @returns {AABB2d}
+   */
+  containsPoint(p, axes, epsilon = 1e-06) {
+    axes ??= this.constructor.axes;
+    const { min, max } = this;
+    if ( !p.x.almostBetween(min._x, max._x, epsilon) ) return false;
+    if ( !p.y.almostBetween(min._y, max._y, epsilon) ) return false;
+    return true;
+  }
+
+  /**
+   * Does this AABB overlap another?
+   * @param {AABB2d} other
+   * @returns {boolean}
+   */
+  overlapsAABB(other) {
+    // Separating Axis Theorem: Must overlap on every axis.
+    // A.minX <= B.maxX && A.maxX >= B.minX && ...same for y, z
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+       // If not overlapping on an axis, return false.
+      if ( this.min.arr[i].almostEqual(other.min.arr[i]) ) continue;
+      if ( this.max.arr[i] < other.min.arr[i] || other.max.arr[i] < this.min.arr[i] ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Does the segment cross this aabb or is contained within?
+   * Will perspective divide the segment.
+   * @param {Segment2d} segment
+   * @returns {boolean}
+   */
+  overlapsSegment(segment) {
+    // Slab method (Liang-Barsky)
+    // Initialize t-interval for the infinite line's intersection with the AABB.
+    let tmin = -Infinity;
+    let tmax = Infinity;
+    const { a, b } = segment;
+    if ( a.w !== 1 ) a.perspectiveDivide(a);
+    if ( b.w !== 1 ) b.perspectiveDivide(b);
+    using rayDirection = b.clone().subtract(a);
+
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      const min = this.min.arr[i];
+      const max = this.max.arr[i]
+      const p0 = a.arr[i];
+      const rd = rayDirection.arr[i];
+      if ( rd.almostEqual(0) ) {
+        // Segment is parallel to the slab for this axis.
+        // If segment origin is outside the slab, it can never intersect.
+        if ( p0 < min || p0 > max ) return false;
+        // Otherwise, the infinite line is always within this slab. Proceed to next axis.
+      }
+
+      // Segment is not parallel.
+      const invD = 1.0 / rd;
+      let t1 = (min - p0) * invD;
+      let t2 = (max - p0) * invD;
+
+      // Ensure t1 is the intersection with the "near" plane and t2 with the "far" plane.
+      if ( t1 > t2 ) [t1, t2] = [t2, t1]; // Swap.
+
+      // Update the overall intersection interval [tmin, tmax].
+      tmin = Math.max(tmin, t1);
+      tmax = Math.min(tmax, t2);
+
+      // If the intersection interval becomes invalid, the line misses the box.
+      if ( tmin > tmax ) return false;
+    }
+
+    // After checking all axes, [tmin, tmax] is the interval where the infinite
+    // line intersects the AABB. The final step is to check if this interval
+    // overlaps with the segment's own interval, which is [0, 1].
+    // Two intervals [a, b] and [c, d] overlap if a <= d and b >= c.
+    // return tmin <= 1.0 && tmax >= 0.0;
+    return (1.0).almostGreaterThan(tmin) && (0.0).almostLessThan(tmax);
+  }
+
+
+
+
 }
 

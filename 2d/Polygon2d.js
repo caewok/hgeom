@@ -1,10 +1,10 @@
-/* globals
+l/* globals
 PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { Point2d, Line2d } from "./Point2d.js";
+import { Point2d, Line2d, Ray2d, Segment2d } from "./Point2d.js";
 import { AABB2d } from "./AABB2d.js";
 
 /**
@@ -17,13 +17,20 @@ import { AABB2d } from "./AABB2d.js";
  */
 
 export class Polygon2d {
+  
+  static [Symbol.hasInstance](instance) {
+    return instance && instance.constructor && instance.constructor._geoLibType === this._geoLibType;
+  }
+
+  static get _geoLibType() { return this.name; }
+  
   /** @type {Point2d} */
   points = [];
 
   // TODO: Is it worth storing lines for polygon edges? Maybe cached? Or vectors?
 
-  constructor(n = 3) {
-    this.points.length = n;
+  constructor(n = 0) {
+    if ( n ) this.points = Point2d.allocateN(n);
   }
 
   [Symbol.dispose]() { this.release(); }
@@ -35,9 +42,123 @@ export class Polygon2d {
 
   // ----- NOTE: Getters ----- //
 
-  /** @type {number} */
-  get length() { return this.points.length; }
+  /**
+   * Determine whether this Polygon is closed, defined by having the same starting and ending point.
+   * @type {boolean}
+   */
+  get isClosed() { return this.points.at(-1).almostEqual(this.points.at(0)); }
 
+  // ----- NOTE: Cache ----- //
+
+  /** 
+   * Clear getter caches. 
+   */
+  clearCache() {
+    this.#dirtyAABB = true;
+    this.#dirtyCentroid = true;
+    this.#cleaned = false;
+    this.#isPositive = undefined;
+  }
+
+  /**
+   * Remove collinear points. 
+   */
+  #cleaned = false;
+  
+  clean() {
+    if ( this.#cleaned ) return;
+    if ( this.points.length < 2 ) return;
+    
+    const points = this.iteratePoints();
+    const result = [points.next().value];
+    for ( const curr of points ) {
+      if ( result.at(-1).almostEqual(curr) ) continue;
+      while ( result.length >= 2
+        && pointsAreCollinear(result.at(-2), result.at(-1), curr) ) result.pop().release();
+      result.push(curr);
+    }
+
+    // Clean up where end meets beginning.
+    // Loop b/c removing a point at a seam may expose a new collinearity.
+    while ( result.length >= 3 ) {
+      // Is the last point a duplicate of the first?
+      if ( result[0].almostEqual(result.at(-1)) ) {
+        result.pop().release();
+        break;
+      }
+
+      // Is the last point redundant? (2nd-to-last -> last -> first)
+      if ( pointsAreCollinear(result.at(-2), result.at(-1), result[0]) ) {
+        result.pop().release();
+        break;
+      }
+
+      // Is the first point redundant? (Last -> first -> second)
+      if ( pointsAreCollinear(result.at(-1), result.at(0), result[1]) ) {
+        result.shift().release(); // Remove the first point.
+        break;
+      }
+    }
+
+    // Copy over the points if necessary.
+    if ( result.length < this.points.length ) {
+      this.points.length = result.length;
+      this.points.forEach((pt, idx) => pt.copyFrom(result[idx]));
+    }
+    this.#cleaned = true;
+  }
+  
+  // ----- NOTE: Orientation ----- //
+  
+  /**
+   * Test whether the polygon is has a positive signed area.
+   * Using a y-down axis orientation, this means that the polygon is "clockwise".
+   * @type {boolean}
+   */
+  #isPositive;
+  
+  get isPositive() {
+    this.#isPositive ??= this.signedArea() > 0;
+    return this.#isPositive;
+  }
+  
+  /**
+   * Compute the signed area of polygon using an approach similar to ClipperLib.Clipper.Area.
+   * The math behind this is based on the Shoelace formula. https://en.wikipedia.org/wiki/Shoelace_formula.
+   * The area is positive if the orientation of the polygon is positive.
+   * @returns {number}              The signed area of the polygon
+   */
+  signedArea() {
+    const points = this.points;
+    const ln = points.length;
+    if ( ln < 3 ) return 0;
+
+    // Compute area
+    let area = 0;
+    let a = this.points.at(-1);
+    for ( const b of this.iteratePoints() ) { 
+      // TODO: can we simplify this for homogenous points?
+      area += (b.x - a.x) * (b.y + a.y);
+      a = b;
+    }
+
+    // Negate the area because in Foundry canvas, y-axis is reversed
+    // See https://sourceforge.net/p/jsclipper/wiki/documentation/#clipperlibclipperorientation
+    // The 1/2 comes from the Shoelace formula
+    return area * -0.5;
+  };
+  
+  /**
+   * Reverse the order of the polygon points in-place, replacing the points array into the polygon.
+   * Note: references to the old points array will not be affected.
+   * @returns {PIXI.Polygon}      This polygon with its orientation reversed
+   */
+  reverseOrientation() {
+    const reversedPts = [...this,reverseIteratePoints()];
+    this.points = reversedPts;
+    if ( this.#isPositive !== undefined ) this.#isPositive = !this.#isPositive;
+    return this;
+  };
 
   // ----- NOTE: AABB ----- //
 
@@ -52,10 +173,14 @@ export class Polygon2d {
   get aabb() {
     if ( this.#dirtyAABB ) {
       this.#aabb ??= AABB2d.newInstance;
-      this.calculateAABB(this.#aabb);
+      this._calculateAABB(this.#aabb);
       this.#dirtyAABB = false;
     }
     return this.#aabb;
+  }
+  
+  _calculateAABB(aabb) {
+    AABB2d.fromPolygon(this, aabb);
   }
 
   /**
@@ -133,7 +258,7 @@ export class Polygon2d {
     out ||= Point2d.newInstance;
     out.arr.fill(0);
     const n = this.length;
-    for ( let i = 0; i < n; i += 1 ) out.add(this.points[i], out);
+    for ( let i = 0; i < n; i += 1 ) out.add(this.points[i]);
     return out;
   }
 
@@ -286,16 +411,14 @@ export class Polygon2d {
 
   /**
    * Iterate the edges of this polygon.
-   * @yield {object}            Two points of the polygon; not copied.
-   *   - @prop {Point2d} a
-   *   - @prop {Point2d} b
+   * @yield {Segment}            Two points of the polygon; not copied.
    * For efficiency, the edge between the last point and the first point will be iterated first.
    */
   *iterateEdges() {
     let a = this.points.at(-1);
     for ( let i = 0, n = this.points.length; i < n; i += 1 ) {
       const b = this.points[i];
-      yield { a, b };
+      yield new Segment2d(a, b);
     }
   }
 
@@ -316,7 +439,7 @@ export class Polygon2d {
     let a = this.points.at(0);
     for ( let i = this.points.length - 1; i > -1; i -= 1 ) {
       const b = this.points[i];
-      yield { a, b };
+      yield new Segment2d(a, b);
     }
   }
 
@@ -327,29 +450,198 @@ export class Polygon2d {
   *reverseIteratePoints() {
     for ( let i = this.points.length - 1; i > -1; i -= 1 ) yield this.points[i];
   }
+  
+  /**
+   * Add a de-duplicated point to the Polygon.
+   * If collinear, will drop the previous point. 
+   * @param {Point2d} pt       The point to add to the Polygon
+   * @returns {Polygon2d}      A reference to the polygon for method chaining
+   */
+  addPoint(pt) {
+    const n = this.points.length;
+    if ( !n ) {
+      this.points.push(pt);
+      this.clearCache();
+      return this;
+    }
+    
+    // Ignore duplicate points. 
+    const b = this.points.at(-1);
+    if ( b.almostEqual(pt) ) return this;
+    
+    if ( n === 1 ) {
+      this.points.push(pt);
+      this.clearCache();
+      return this;
+    }
+    
+    // Prevent collinear points by dropping the middle point. 
+    const a = this.points.at(-2);
+    if ( Point2d.cOrient(a, b, pt).almostEqual(0) ) this.points[n - 1] = pt; // Replace b with the new point. 
+    else this.points.push(pt);
+    this.clearCache();
+    return this;
+  };
+  
+  // ----- NOTE: Convex hull ----- //
+  
+  /**
+ * Convex hull algorithm.
+ * Returns a polygon representing the convex hull of the given points.
+ * Excludes collinear points.
+ * Runs in O(n log n) time
+ * @returns {PIXI.Polygon}
+ */
+convexHull() {
+  const ln = this.points.length;
+  if ( ln <= 1 ) return points;
 
+  const newPoints = [...points];
+  newPoints.sort(convexHullCmpFn);
+
+  // Andrew's monotone chain algorithm.
+  const upperHull = [];
+  for ( let i = 0; i < ln; i += 1 ) {
+    testHullPoint(upperHull, newPoints[i]);
+  }
+  upperHull.pop();
+
+  const lowerHull = [];
+  for ( let i = ln - 1; i >= 0; i -= 1 ) {
+    testHullPoint(lowerHull, newPoints[i]);
+  }
+  lowerHull.pop();
+
+  if ( upperHull.length === 1
+    && lowerHull.length === 1
+    && upperHull[0].x === lowerHull[0].x
+    && upperHull[0].y === lowerHull[0].y ) return this.constructor.fromPoints(upperHull);
+
+  return this.constructor.fromPoints(upperHull.concat(lowerHull));
+}
+
+  // ----- NOTE: Transforms ----- //
+
+  /**
+   * Transform this polygon by a 3x3 matrix.
+   * @param {Matrix} M
+   * @returns {Polygon2d}
+   */
+  transform(M) {
+    this.iteratePoints().forEach(pt => M.multiplyPoint(pt));
+    return this;
+  }
+  
+  // ----- NOTE: Intersection ----- //
+
+  /**
+   * Does this point's coordinates lie within this polygon?
+   * @param {Point2d} pt
+   * @returns {boolean}
+   */
+  contains(pt) {
+    // Cast a ray from the point and count how many edges it crosses.
+    let inside = false;
+    using dir = Point2d.build(1, 1e-06, 0); // use a slight angle to avoid passing exactly theiughs vertex..
+    const r = new Ray2d(pt, dir);
+    for ( const edge of this.iterateEdges() {
+       if ( r.intersectsSegment(edge) ) inside != inside;
+    }
+    return inside;
+  }
+  
+  
+  /**
+   * Test whether line segment a|b intersects this polygon.
+   * Equivalent to PIXI.Rectangle.prototype.lineSegmentIntersects.
+   * @param {Segment2d} s                   The second endpoint of segment a|b
+   * @param {object} [options]              Options affecting the intersect test.
+   * @param {boolean} [options.inside]      If true, a line contained within the rectangle will
+   *                                        return true.
+   * @returns {boolean} True if intersects.
+   */
+  segmentIntersects(s, { inside = false } = {}) {
+    if ( this.contains(s.a) && this.contains(s.b) ) return inside;
+    for ( const edge of this.iterateEdges() ) {
+      if ( s.intersects(edge) ) return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Test whether a line intersects this polygon. 
+   * @param {Line2d} l
+   * @returns {boolean} True if line intersects. 
+   */
+  lineIntersects(l) {
+    
+  }
+  
+  /**
+   * Test whether a ray intersects this polygon. 
+   * @param {Ray2d} r
+   * @returns {boolean} True if line intersects. 
+   */
+  rayIntersects(r, { inside = false } = {}) {
+    
+  }
+
+}
+
+/**
+ * Comparison function used by convex hull function.
+ * @param {Point} a
+ * @param {Point} b
+ * @returns {boolean}
+ */
+function convexHullCmpFn(a, b) {
+  const dx = a.x - b.x;
+  return dx ? dx : a.y - b.y;
+}
+
+/**
+ * Test the point against existing hull points.
+ * @parma {PIXI.Point[]} hull
+ * @param {PIXI.Point} point
+*/
+function testHullPoint(hull, p) {
+  while ( hull.length >= 2 ) {
+    const q = hull[hull.length - 1];
+    const r = hull[hull.length - 2];
+    // TO-DO: Isn't this a version of orient2d? Replace?
+    if ( Point.cOrient(p, q, r) >= 0 ) hull.pop();
+    // if ( (q.x - r.x) * (p.y - r.y) >= (q.y - r.y) * (p.x - r.x) ) hull.pop();
+    else break;
+  }
+  hull.push(p);
 }
 
 export class Ellipse2d extends Polygon2d {
   /** @type {number} */
-  semiMajor = 0;
+  semiMajor = 1;
 
   /** @type {number} */
-  semiMinor = 0;
-
-  /** @type {number} */
+  semiMinor = 1;
+  
+  /** @type {number<radians>} */
   rotation = 0;
 
-  get width() { return this.semiMajor; }
+  /**
+   * Longest diameter.
+   * @type {number}
+   */
+  get width() { return this.semiMajor * 2; }
+  
+  set width(value) { this.semiMajor = value / 2; }
 
-  get height() { return this.semiMinor; }
-
-  get a() { return this.semiMajor; }
-
-  get b() { return this.semiMinor; }
+  get height() { return this.semiMinor * 2; }
+  
+  set height(value) { return this.semiMinor = value / 2; }
 
   /** @type {Point2d} */
   get center() { return this.points[0]; }
+  
+  set center(value) { this.points[0].copyFrom(value); }
 
   constructor() { super(1); }
 
@@ -411,6 +703,100 @@ export class Ellipse2d extends Polygon2d {
     out.semiMinor = pixiEllipse.height;
     return out;
   }
+  
+  /**
+   * Create a new ellipse.
+   * @param {Point2d} center
+   * @param {object} opts
+   * @param {number} [semiMajor=0]
+   * @param {number} [semiMinor=0]
+   * @param {number} [width=0]
+   * @param {number} [height=0]
+   * @param {number} [rotation=0]
+   * @returns {Ellipse2d}
+   */
+  static create(center, { semiMajor = 1, semiMinor = 1, width, height, rotation = 0 } = {}) {
+    const ellipse = new this();
+    ellipse.center.copyFrom(center);
+    ellipse.rotation = rotation;
+    if ( width ) this.width = width;
+    else this.semiMajor = semiMajor;
+    if ( height ) this.height = height;
+    else semiMinor = semiMinor;
+    return ellipse;
+  }
+  
+  // ----- NOTE: Polygon conversion ----- //
+  
+  /**
+   * Convert this ellipse to a polygon. 
+   * @param {number} [density]
+   * @returns {Polygon2d}
+   */
+  toPolygon() {
+    const density = Circle3d.approximateVertexDensity(Math.max(this.semiMajor, this.semiMinor));
+    const cir = new Circle3d();
+    using M = this.fromUnitCircleMatrix();
+    const poly = cir.toPolygon({ density });
+    poly.iteratePoints().forEach(pt => pt.transform(M));
+    return poly;
+  }
+  
+  /**
+   * Calculate a conversion matrix to transform points from unit circle to this ellipse. 
+   * @param {Point2d} pt				Converted in place
+   * @returns {Matrix<3x3>} 
+   */
+  fromUnitCircleMatrix() {
+    const d3 = false;
+    const center = this.center;
+    const angles = { z: this.rotation };
+    const dims = { x: this.semiMajor, y: this.semiMinor };
+    return Matrix.modelTransform({ center, angles, dims, d3 });
+  }
+  
+  // ----- NOTE: Iterators ----- //
+
+  /**
+   * Iterate the edges of this polygon.
+   * @yield {Segment}            Two points of the polygon; not copied.
+   * For efficiency, the edge between the last point and the first point will be iterated first.
+   */
+  *iterateEdges(opts) {
+    using poly = this.toPolygon(opts);
+    yield* poly.iterateEdges();
+  }
+
+  /**
+   * Iterate the points of this polygon.
+   * @yield {Point2d}       Point of the polygon, not copied.
+   */
+  *iteratePoints(opts) { 
+    using poly = this.toPolygon(opts);
+    yield* poly.iteratePoints();
+  }
+
+  /**
+   * Iterate the edges of this polygon in reverse order.
+   * @yield {object}            Two points of the polygon; not copied.
+   *   - @prop {Point2d} a
+   *   - @prop {Point2d} b
+   * For efficiency, the edge between the first point and the last point will be iterated first.
+   */
+  *reverseIterateEdges(opts) {
+    using poly = this.toPolygon(opts);
+    yield* poly.reverseIterateEdges();
+  }
+
+  /**
+   * Iterate the points of this polygon, in reverse order.
+   * @yield {Point2d}       Point of the polygon, not copied.
+   */
+  *reverseIteratePoints(opts) {
+    using poly = this.toPolygon(opts);
+    yield* poly.reverseIteratePoints();
+  }
+
 }
 
 export class Circle2d extends Ellipse2d {
@@ -438,71 +824,199 @@ export class Circle2d extends Ellipse2d {
     delete this.semiMinor;
     delete this.rotation;
   }
+  
+  /**
+   * Create a new circle.
+   * @param {Point2d} center
+   * @param {number} radius
+   * @returns {Circle2d}
+   */
+  static create(center, radius = 0) {
+    const circle = new this();
+    circle.center.copyFrom(center);
+    circle.radius = radius;
+    return circle;
+  }
+  
 
   /**
    * Calculate the bounding box for this polygon.
    * @param {AABB2d} [out]
    * @returns {AABB2d}
    */
-  calculateAABB(out) { return AABB2d.fromCircle2d(this, out); }
+  fromPIXI(pixiCircle) {
+    // TODO: Implement.
+  }
+  
+  /**
+   * Get the points that would approximate a circular arc along this circle, given a starting and ending angle.
+   * Points returned are clockwise. If from and to are the same, a full circle will be returned.
+   * @param {number} fromAngle     Starting angle, in radians. π is due north, π/2 is due east
+   * @param {number} toAngle       Ending angle, in radians
+   * @param {object} [options]     Options which affect how the circle is converted
+   * @param {number} [options.density]           The number of points which defines the density of approximation
+   * @param {boolean} [options.includeEndpoints]  Whether to include points at the circle where the arc starts and ends
+   * @returns {Point2d[]}             An array of points along the requested arc
+   */
+  pointsForArc = function(fromAngle, toAngle, { density, includeEndpoints = true } = {}) {
+    const pi2 = 2 * Math.PI;
+    density ??= this.constructor.approximateVertexDensity(this.radius);
+    
+    // Determine number of points to add
+    let dAngle = toAngle - fromAngle;
+    while ( dAngle <= 0 ) dAngle += pi2; // Angles may not be normalized, so normalize total.
+    const nPoints = Math.round(dAngle / delta);
+    const points = Point2d.allocateNObjects(nPoints + (2 * includeEndpoints));
+    
+    let i = 0;
+    if ( includeEndpoints ) this.pointAtAngle(fromAngle, points[i++]);
+    
+    // Construct padding rays (clockwise)
+    const delta = pi2 / density;
+    for ( let j = 0; j < nPoints; j++ ) this.pointAtAngle(fromAngle + (j * delta)), points[i++]);
+    if ( includeEndpoints ) this.pointAtAngle(fromAngle, points[i++]);
+    return points;
+  };
+
+  /**
+   * The recommended vertex density for the regular polygon approximation of a circle of a given radius.
+   * Small radius circles have fewer vertices. The returned value will be rounded up to the nearest integer.
+   * See the formula described at:
+   * https://math.stackexchange.com/questions/4132060/compute-number-of-regular-polgy-sides-to-approximate-circle-to-defined-precision
+   * @param {number} radius     Circle radius
+   * @param {number} [epsilon]  The maximum tolerable distance between an approximated line segment and the true radius.
+   *                            A larger epsilon results in fewer points for a given radius.
+   * @returns {number}          The number of points for the approximated polygon
+   */
+  static approximateVertexDensity = function(radius, epsilon = 1) {
+    return Math.ceil(Math.PI / Math.sqrt(2 * (epsilon / radius)));
+  };
+
+  /**
+   * Calculate an x,y point on this circle's circumference given an angle
+   * 0: due east
+   * π / 2: due south
+   * π or -π: due west
+   * -π/2: due north
+   * @param {number} angle      Angle of the point, in radians
+   * @param {Point2d} [out]      Where to store the result
+   * @returns {Point2d}         The point on the circle at the given angle
+   */
+  pointAtAngle = function(angle, out) {
+    const { center, radius } = this;
+    out ??= Point2d.newInstance();
+    out.set(
+      center.x + (radius * Math.cos(angle)),
+      center.y + (radius * Math.sin(angle)),
+    );
+  };
+
+  /**
+   * Get all the points for a polygon approximation of this circle between two points.
+   * The two points can be anywhere in 2d space. The intersection of this circle with the line from this circle center
+   * to the point will be used as the start or end point, respectively.
+   * This is used to draw the portion of the circle (the arc) between two intersection points on this circle.
+   * @param {Point2d} a             Point in 2d space representing the start point
+   * @param {Point2d} b             Point in 2d space representing the end point
+   * @param {object} [options]    Options passed on to the pointsForArc method
+   * @returns { Point2d[]}          An array of points arranged clockwise from start to end
+   */
+  pointsBetween = function(a, b, options) {
+    const center = this.center;
+    using deltaA = a.clone().subtract(center);
+    using deltaB = b.clone().subtract(center);
+    const fromAngle = Math.atan2(deltaA.y, deltaA.x);
+    const toAngle = Math.atan2(deltaB.y, deltaB.x);
+    return this.pointsForArc(fromAngle, toAngle, { includeEndpoints: false, ...options });
+  };
+  
+  /**
+   * Approximate this circle as a polygon. 
+   * @param {object} [options]      Options forwarded on to the pointsForArc method
+   * @returns {PIXI.Polygon}        The Circle expressed as a PIXI.Polygon
+   */
+  toPolygon(options) {
+    const points = this.pointsForArc(0, 0, options);
+    points.pop(); // Drop the repeated endpoint
+    return new PIXI.Polygon(points);
+  };
+  
+  /**
+ * Test if any segment in an array crosses a polygon edge
+ * @param {Segment2d[]} segments    Array of lines
+ * @returns {boolean}
+ */
+ segmentsCross(segments) {
+  for ( const edge of this.iterateEdges() ) {
+    for ( const segment of segments ) {
+      if ( segment.segmentCrosses(edge) ) return true;
+    }
+  }
+  return false;
 }
 
-export class Segment2d extends Polygon2d {
-  constructor() { super(2); }
-
-  get a() { return this.points[0]; }
-
-  get b() { return this.points[1]; }
-
-  /** @type {Point2d} */
-  get center() { return Point2d.midPoint(this.points[0], this.points[1]); }
-
-  /** @type {Line2d} */
-  get line() { return Line2d.fromPoints(this.points[0], this.points[1]); }
-
   /**
-   * Test if one finite line segment intersects another.
-   * @param {Segment2d} s1
-   * @param {Segment2d} s2
-   * @returns {boolean}
-   */
-  static segmentsIntersect(s1, s2) {
-    // Test a|b compared to c|d to reject collinear cases.
-    using ab = s1.line;
-    const xa = ab.orient(s2.a);
-    const xb = ab.orient(s2.b);
-    if ( !(xa || xb) ) return false;
-    const xab = (xa * xb) <= 0;
+ * Can this polygon be triangulated using a fan?
+ * @param {PIXI.Point} centroid       Assumed center point
+ * @returns {boolean}
+ */
+ canUseFanTriangulation(centroid) {
+  centroid ??= this.center;
+  if ( !this.contains(centroid) ) return false;
+  const segments = this.iteratePoints().map(b => Segment.withPoints(centroid, b));
+  return !this.segmentsCross(segments); // Lines cross ignores lines that only share endpoints.
+}
 
-    // Also require C|D intersects AB.
-    using cd = s2.line;
-    const xcd = (cd.orient(s1.a) * cd.orient(s1.b)) <= 0;
-    return xab && xcd;
+/**
+ * Triangulate the polygon.
+ * @param {useFan} [useFan]    Use fan algorithm to triangulate if possible. Only works if the lines don't cross.
+ *   True forces the fan and does not check
+ * @returns {Triangle2d[]} Array of triangle polygons
+ */
+triangulate({ useFan, centroid } = {}) {
+  const pts = this.points;
+  centroid ??= this.center;
+  if ( typeof useFan === "undefined" ) useFan = this.canUseFanTriangulation(centroid);
+  if ( useFan ) {
+    const polys = new Array(this.points.length);
+    let j = 0;
+    for ( const edge of this.iterateEdges() ) {
+      polys[j++] = Triangle2d.fromPoints(center, edge.a, edge.b);
+    }
+    return polys;
   }
 
-  /**
-   * Intersect two finite line segments.
-   * @param {Segment2d} s1
-   * @param {Segment2d} s2
-   * @returns {Point2d}
-   */
-  static segmentIntersection(s1, s2) {
-    using l1 = s1.line;
-    using l2 = s2.line;
-    const ix = l1.intersect(l2);
-
-    // If parallel line, return null (cannot be on the segment)
-    if ( ix.w.almostEqual(0) ) return null;
-
-    // Verify the point lies within both segments.
-    if ( s1.isPointOnSegment(ix) && s2.isPointOnSegment(s2) ) return ix;
-    ix.release();
-    return null;
+  // Use earcut.
+  const indices = PIXI.utils.earcut(pts.flatMap(pt => [pt.x, pt.y]);
+  const ln = indices.length;
+  const polys = new Array((pts.length * 2) / 3);
+  for ( let i = 0, j = 0; i < ln; ) {
+    const idx0 = indices[i++];
+    const idx1 = indices[i++];
+    const idx2 = indices[i++];
+    polys[j++] = Polygon2d.fromPoints([
+      pts[idx0],
+      pts[idx1],
+      pts[idx2],
+    ];
   }
+  return polys;
+}
 
+/**
+ * Create a grid of points within this polygon.
+ * @param {object} [opts]
+ * @param {number} [opts.spacing = 1]              How many pixels between each point?
+ * @param {boolean} [opts.startAtEdge = false]     Are points allowed within spacing of the edges? Otherwise will be at least spacing away.
+ * @returns {PIXI.Point[]} Points in order from left to right, top to bottom.
+ */
+function pointsLattice({ spacing = 1, startAtEdge = false } = {}) {
+  const poly = startAtEdge ? this : this.clone().pad(-spacing);
+  const bounds = poly.aabb;
+  const pts = bounds.pointsLattice({ spacing, startAtEdge: true }); // Start at edge b/c already padded the polygon.
   /**
    * Determine if a point P is between A and B.
-   * Works by checking if (P-A) � (B-A) is between 0 and |B-A|^2
+   * Works by checking if (P-A) � (B-A) is between 0 and |B-A|^2
    * @param {Point2d} pt
    * @returns {boolean}
    */
@@ -512,13 +1026,10 @@ export class Segment2d extends Polygon2d {
     using apV = pt.subtract(this.a);
     const dotProduct = abV.dot(apV);
 
-    // If dot product is negative, the point is behind A.
-    if ( dotProduct < 0 ) return false;
+  // For arbitrary polygon, unfortunately, have to test the bounds for each.
+  return pts.filter(pt => this.contains(pt));
+}
 
-    // If dot product > squaredLength, the point is past B.
-    const squaredLength = abV.magnitudeSquared();
-    return dotProduct <= squaredLength;
-  }
 }
 
 export class Triangle2d extends Polygon2d {

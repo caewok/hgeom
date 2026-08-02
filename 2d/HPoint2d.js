@@ -89,16 +89,15 @@ export class HPoint2d extends HPointAbstract {
    * @param {HPoint2d} other
    * @param {HPoint2d} out
    */
-  cross(other, out) {
+  cross(other) {
     // Same as this.constructor.cross but with less checks.
     // Avoid overwriting if out is this or other.
-    out ||= this.constructor.newInstance;
     const x = this.constructor.cross2d(this, other, 1, 2);
     const y = this.constructor.cross2d(this, other, 2, 0);
     const w = this.constructor.cross2d(this, other, 0, 1);
-    out.arr[0] = x;
-    out.arr[1] = y;
-    out.arr[2] = w;
+    this.arr[0] = x;
+    this.arr[1] = y;
+    this.arr[2] = w;
     return out;
   }
 
@@ -149,11 +148,9 @@ export class HPoint2d extends HPointAbstract {
   /**
    * Transform a point by a 3x3 matrix.
    * @param {Matrix<3x3} M
-   * @param {HPoint2d} out
    * @returns {HPoint2d}
    */
-  transform(M, out) {
-    out ||= this.constructor.newInstance;
+  transform(M) {
     const a = M.arr;
     const b = this.arr;
 
@@ -173,12 +170,12 @@ export class HPoint2d extends HPointAbstract {
     const b01 = b[1];
     const b02 = b[2];
 
-    const o = out.arr;
+    const o = this.arr;
     o[0] = a00 * b00 + a10 * b01 + a20 * b02;
     o[1] = a01 * b00 + a11 * b01 + a21 * b02;
     o[2] = a02 * b00 + a12 * b01 + a22 * b02;
 
-    return out;
+    return this;
   }
 }
 
