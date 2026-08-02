@@ -19,7 +19,7 @@ export class Point2d extends HPoint2d {
    * @param {Point2d} out
    * @returns {Point2d}
    */
-  static midPoint(a, b) { return a.add(b, out); }
+  static midPoint(a, b, out) { return a.add(b, out); }
 
   /**
    * Get the intersection of two lines as a point.
@@ -38,6 +38,46 @@ export class Point2d extends HPoint2d {
  * Line2d is the dual of Point2d.
  */
 export class Line2d extends HPoint2d {
+
+  get a() { return this._x; }
+
+  set a(value) { this._x = value; }
+
+  get b() { return this._y; }
+
+  set b(value) { this._y = value; }
+
+  get c() { return this._w; }
+
+  set c(value) { this._w = value; }
+
+  get isNormalizedEuclidean() { return (this.a ** 2 + this.b ** 2) === 1; }
+
+  /**
+   * Euclidean normalization. Vector w set to 1.
+   * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+   * Once normalized, [a, b, 0] is the normal and [c] is -d (distance to origin)
+   * @param {HPointAbstract} out
+   * @returns {HPointArray} out
+   */
+  euclideanNormalization(out) {
+    // For lines, divide by magnitude of the a, b.
+    const mag = Math.sqrt(this.a ** 2 + this.b ** 2);
+    out ||= this.constructor.newInstance;
+    this.clone(out);
+    return out.scale(mag, out);
+  }
+
+  // NOTE: Line must be normalized first using euclideanNormalization.
+  get normal() {
+    this.euclideanNormalization();
+    return Point2d.build(this.a, this.b, 0);
+  }
+
+  get distanceFromOrigin() {
+    this.euclideanNormalization();
+    return -this.c;
+  }
 
   /**
    * @param {Point2d} a
@@ -63,7 +103,7 @@ export class Line2d extends HPoint2d {
    * @param {Point2d} pt
    * @returns {number}
    */
-  orient(pt) { return this.dot(pt); }
+  orient(pt) { return -this.dot(pt); }
 
   /**
    * Intersect this line with another.

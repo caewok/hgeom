@@ -32,30 +32,54 @@ export class Point3d extends HPoint3d {
  */
 export class Plane extends HPoint3d {
 
+  get a() { return this._x; }
+
+  set a(value) { this._x = value; }
+
+  get b() { return this._y; }
+
+  set b(value) { this._y = value; }
+
+  get c() { return this._z; }
+
+  set c(value) { this._z = value; }
+
+  get d() { return this._w; }
+
+  set d(value) { this._w = value; }
+
+  get isNormalizedEuclidean() { return (this.a ** 2 + this.b ** 2 + this.c ** 2) === 1; }
+
+
   // ----- NOTE: Normal ----- //
 
   #normalized = false;
 
+  get normalized() { return this.#normalized; }
+
   get normal() {
-    if ( !this.#normalized ) this.normalize();
-    const a = this.arr;
-    return Point3d.newInstances.set(a[0], a[1], a[2], 0);
+    this.euclideanNormalization(this);
+    return Point3d.build(this.a, this.b, this.c, 0);
+  }
+
+  get distanceFromOrigin() {
+    this.euclideanNormalization(this);
+    return -this.d;
   }
 
   /**
-   * Normalize the normal vector (first three coordinates), adjusting w accordingly.
-   * Done in place b/c it should not change the vector.
+   * Euclidean normalization. Vector w set to 1.
+   * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+   * Once normalized, [a, b, 0] is the normal and [c] is -d (distance to origin)
+   * @param {HPointAbstract} out
+   * @returns {HPointArray} out
    */
-  normalize() {
-    const a = this.arr;
-    let mag = 0;
-    const wIdx = this.constructor.DIMS;
-    for ( let i = 0; i < wIdx; i += 1 ) mag += (a[i] ** 2);
-    let scalar = 1/Math.sqrt(mag);
-    if ( this.w < 0 ) scalar *= -1;
-    this.multiplyScalar(scalar, this);
-    this.#normalized = true;
-    return this;
+  euclideanNormalization(out) {
+    // For lines, divide by magnitude of the a, b.
+    const mag = Math.sqrt(this.a ** 2 + this.b ** 2 + this.c ** 2);
+    out ||= this.constructor.newInstance;
+    this.clone(out);
+    return out.scale(mag, out);
   }
 
 
@@ -81,9 +105,9 @@ export class Plane extends HPoint3d {
    * @param {Point3d} pt
    * @returns {number}
    */
-  whichSide(pt) { return this.dot(pt); }
+  whichSide(pt) { return Math.sign(this.orient(pt)); }
 
-  orient(pt) { return this.dot(pt); }
+  orient(pt) { return -this.dot(pt); }
 
   // ----- NOTE: Intersection tests ----- //
 
@@ -95,14 +119,30 @@ export class Plane extends HPoint3d {
   pointOnPlane(pt) { return this.dot(pt).almostEqual(0); }
 
   /**
-   * Determine the directional vector where this plane intersects another.
+   * Determine the line where this plane intersects another.
    * @param {Plane} other
    * @param {Point3d} [out]
-   * @returns {Point3d}
+   * @returns {Line3d}
    */
   planeIntersection(other, out) {
-    out ||= Point3d.newInstance;
-    return this.cross(other, out);
+    // TODO: Is normalization necessary?
+    return Line3d.fromPlanes(this, other, out);
+    // return out.getDualLine(out); // Needed?
+
+    /*
+    if ( !this.normalized ) this.normalize;
+    if ( !other.normalized ) other.normalize;
+
+    // Ah x Bh, where h indicates the normal of each.
+    this.constructor.crossVectors(this, other, out.direction);
+
+    // AoBh - BoAh. Photogrammetric Computer Vision.
+    using nB = other.normal.scale(this.d);
+    using nA = this.normal.scale(other.d);
+    nA.subtract(nB, out.moment);
+
+    return out;
+    */
   }
 
   /**

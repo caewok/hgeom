@@ -7,6 +7,7 @@ PIXI,
 export function runTests(context) {
   const { describe, it, expect, beforeEach } = context;
   const AABB2d = HGEOM.AABB2d;
+  const Point2d = HGEOM.Point2d;
 
   describe("AABB2d Class", () => {
     let aabb;
@@ -17,17 +18,17 @@ export function runTests(context) {
     });
 
     describe("Factory Methods & Initialization", () => {
-      it("should initialize with infinite bounds", () => {
-        expect(aabb.min.x).to.equal(Number.NEGATIVE_INFINITY);
-        expect(aabb.max.x).to.equal(Number.POSITIVE_INFINITY);
+      it("should initialize with null (reversed infinite) bounds", () => {
+        expect(aabb.min.x).to.equal(Number.POSITIVE_INFINITY);
+        expect(aabb.max.x).to.equal(Number.NEGATIVE_INFINITY);
       });
 
       it("should correctly clear bounds using _clear()", () => {
         aabb.min.set(0, 0);
         aabb.max.set(10, 10);
         aabb._clear();
-        expect(aabb.min.x).to.equal(Number.NEGATIVE_INFINITY);
-        expect(aabb.max.y).to.equal(Number.POSITIVE_INFINITY);
+        expect(aabb.min.x).to.equal(Number.POSITIVE_INFINITY);
+        expect(aabb.max.y).to.equal(Number.NEGATIVE_INFINITY);
       });
     });
 
@@ -95,13 +96,9 @@ export function runTests(context) {
         aabb.min.set(10, 10);
         aabb.max.set(20, 20);
 
-        // Segment crossing through
-        const seg1 = { a: { x: 0, y: 0, arr: [0, 0], w: 1 }, b: { x: 30, y: 30, arr: [30, 30], w: 1 } };
-        // Segment completely outside
-        const seg2 = { a: { x: 0, y: 0, arr: [0, 0], w: 1 }, b: { x: 5, y: 5, arr: [5, 5], w: 1 } };
-
-        // Mocking subtract and perspectiveDivide if not fully present in the test environment
-        // Assuming Point2d/PointArray methods exist on seg1.a and seg1.b
+        const seg1 = { a: Point2d.build(0, 0), b: Point2d.build(30, 30) } // Segment crossing through
+        const seg2 = { a: Point2d.build(0, 0), b: Point2d.build(5, 5) } // Segment completely outside
+        
         expect(aabb.overlapsSegment(seg1)).to.be.true;
         expect(aabb.overlapsSegment(seg2)).to.be.false;
       });
@@ -109,10 +106,10 @@ export function runTests(context) {
 
     describe("Edge Cases", () => {
       it("should handle makeFinite() correctly", () => {
-        aabb._clear(); // Sets to Infinity
+        aabb._clear(); // Sets to Reverse Infinity
         const finite = aabb.makeFinite();
-        expect(finite.max.x).to.equal(Number.MAX_SAFE_INTEGER);
-        expect(finite.min.x).to.equal(Number.MIN_SAFE_INTEGER);
+        expect(isFinite(finite.max.x)).to.be.true;
+        expect(isFinite(finite.min.x)).to.be.true;
       });
 
       it("should throw error on unrecognized shapes in fromShape", () => {

@@ -48,10 +48,10 @@ export class Line3d {
   static create() {
     const out = new this();
     const pts = Point3d.allocate(2);
-    direction = pts[0];
-    moment = pts[1];
-    direction.w = 0;
-    moment.w = 0;
+    out.direction = pts[0];
+    out.moment = pts[1];
+    out.direction.w = 0;
+    out.moment.w = 0;
     return out;
   }
 
@@ -61,12 +61,10 @@ export class Line3d {
    * @param {Point3d} b
    * @returns {Line3d}
    */
-  static fromPoints(a, b) {
-    const out = this.create();
-    using d = b.subtract(a);
-    using m = a.cross(b);
-    this.direction.copyFrom(d);
-    this.moment.copyFrom(m);
+  static fromPoints(a, b, out) {
+    out ||= this.create();
+    b.subtract(a, this.direction);
+    a.constructor.crossVectors(a, b, this.moment);
     return out;
   }
 
@@ -76,9 +74,9 @@ export class Line3d {
    * @param {plane} plane2
    * @returns {Line3d}
    */
-  static fromPlanes(plane1, plane2) {
+  static fromPlanes(plane1, plane2, out) {
     // Same as fromPoints?
-    return this.fromPoints(plane1, plane2);
+    return this.fromPoints(plane1, plane2, out);
   }
 
   /**
@@ -87,14 +85,11 @@ export class Line3d {
    * @param {Point3d} rayDirection
    * @returns {Line3d}
    */
-  static fromRay(rayOrigin, rayDirection) {
-    // See fromPoints.
-    const out = this.create();
+  static fromRay(rayOrigin, rayDirection, out) {
+    // TODO: Is there a faster method? Can copy direction directly but
+    //   still need b to calculate the moment unless there is a shortcut.
     using b = rayOrigin.add(rayDirection);
-    using m = rayOrigin.cross(b);
-    this.direction.copyFrom(rayDirection);
-    this.moment.copyFrom(m);
-    return out;
+    return this.fromPoints(rayOrigin, b, out);
   }
 
   // ----- NOTE: Methods ----- //
@@ -126,10 +121,35 @@ export class Line3d {
   distanceSquaredFromPoint(pt) {
     // Distance from the point p is the magnitude of the cross product of the point and direction.
     // Must use cartesian point coordinates.
-    pt.perspectiveDivide();
+    pt.perspectiveDivide(); // Change in place b/c perspectiveDivide does not change the point properties.
     using xd = pt.cross(this.direction);
     xd.subtract(this.moment, xd);
     return xd.magnitudeSquared();
+  }
+
+  /**
+   * Given a 3d line by the join of two points X, Y, its dual line is the intersection
+   * of the two planes A, B dual to the given points.
+   * Photogrammetric Computer Vision section 5.6.2, page 233.
+   * @param {Line3d} out
+   * @returns {Line3d}
+   */
+  getDualLine(out) {
+    // Swap moment and direction.
+    // Also equivalent to:
+    // Using the generating points X, Y
+    // [Lo] = [Xo x Yo]
+    // [Lh] = [XhYo - YhXo]
+    // Or by the dual plucker matrix given A and B generating Planes:
+    // AB† - BA† (where † means transposed). See section 5.6.2 for more details on that matrix.
+    out ||= this.constructor.newInstance;
+
+    // Be careful not to overwrite existing when out === this.
+    using m = Point3d.newInstance;
+    this.moment.clone(m);
+    out.moment.clone(this.direction);
+    out.direction.clone(m);
+    return out;
   }
 
   // ----- NOTE: Static methods ----- //
@@ -157,9 +177,8 @@ export class Line3d {
     // 0 = (m • d')x0 + (d x d') • x, where x = {x1, x2, x3}.
     // https://en.wikipedia.org/wiki/Pl%C3%BCcker_coordinates
     const plane = Plane.newInstance;
-    const x0 = l1.moment.dot(l2.direction);
-    l1.direction.cross(l2.direction, plane);
-    plane.w = x0;
+    Point3d.crossVectors(l1.direction, l2.direction, plane);
+    plane.w = l1.moment.dot(l2.direction);;
     return plane;
   }
 
@@ -175,7 +194,7 @@ export class Line3d {
     const x0 = l1.direction.dot(l2.moment);
     l1.moment.cross(l2.moment, pt);
     pt.w = x0;
-    return plane;
+    return pt;
   }
 
   /* TODO: Implement this in Triangle3d.

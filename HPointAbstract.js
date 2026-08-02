@@ -20,6 +20,12 @@ export class PointArray {
   /** @type {Float32Array} */
   arr = []; // Could set to null but this provides better compatibility.
 
+  get isNormalizedEuclidean() {
+    return this.w === 1 || this.w === 0;
+  }
+
+  get isNormalizedSpherical() { return this.magnitudeSquared === 1; }
+
   // ----- NOTE: Instance check ----- //
 
   /**
@@ -67,7 +73,7 @@ export class PointArray {
    * @param {...number} args
    * @returns {HPointArray}
    */
-  static build(...args) { return this.create(args.length).set(...args); }
+  static build(...args) { return this.create(args.length - 1).set(...args); }
 
   /**
    * Create a new point that contains the same values as this one.
@@ -91,6 +97,34 @@ export class PointArray {
     return this;
   }
 
+  /**
+   * Copy points from a given object.
+   * If the object contains w, will copy directly.
+   * Otherwise will set x and y, setting w to 1.
+   * @param {object} obj
+   * @param {PointArray} out
+   * @returns {PointArray}
+   */
+  copyFrom(obj, out) {
+    if ( obj instanceof HGEOM.Matrix ) obj = obj.arr;
+
+    // Arrays, TypedArrays, Matrix.
+    if ( Array.isArray(obj) || ArrayBuffer.isView(obj) ) {
+      out ||= this.constructor.create(obj.length - 1); // Need the DIMS, which is assumed to not include w.
+      for ( let i = 0, n = Math.min(out.DIMS + 1, obj.length); i < n; i += 1 ) out.arr[i] = obj[i];
+    }
+
+    // PointArray.
+    else if ( obj instanceof HGEOM.PointArray ) {
+      out ||= this.constructor.create(obj.DIMS)
+      // Allow copying of objects with different dimensions.
+      for ( let i = 0, n = Math.min(out.DIMS, obj.DIMS); i < n; i += 1 ) out.arr[i] = obj.arr[i];
+      out.w = obj.w;
+    }
+
+    // Otherwise don't copy.
+    return out;
+  }
 
   // ----- NOTE: Property getters ----- //
 
@@ -561,7 +595,7 @@ export class PointArray {
     const m1 = this.w;
     const m2 = other.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
-    out.w = m1 * m2;
+    out.w = 0;
     return  out;
   }
 
@@ -609,6 +643,45 @@ export class PointArray {
     const w = this.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
+  }
+
+  // ----- NOTE: Equality ----- //
+
+  /**
+   * Is this point exactly equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {PointArray} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    const a = this.arr;
+    const b = other.arr;
+    if ( a.length !== b.length ) return false;
+
+    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) {
+      if ( a[i] !== b[i] ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Is this point almost equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {PointArray} other
+   * @param {number} [epsilon]
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    const a = this.arr;
+    const b = other.arr;
+     if ( a.length !== b.length ) return false;
+
+    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) {
+      if ( !a[i].almostEqual(b[i], epsilon) ) return false;
+    }
+    return true;
   }
 
   // ----- NOTE: Matrix transform ----- //
@@ -678,7 +751,33 @@ export class PointArray {
     out.multiplyScalar(1/out.w);
     return out;
   }
-
+  
+	/**
+	 * Euclidean normalization. Point w set to 1.
+	 * Perspective divides the point in place. 
+	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+	 * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
+	 * @returns {HPointArray} out
+	 */
+	euclideanNormalization() {
+	  if ( !(this.isVector || this.isNormalizedEuclidean) ) this.perspectiveDivide(this);
+	  return this;
+	}
+	
+	/**
+	 * Spherical normalization. Point or vector normalized to 1.
+	 * Done in place.
+	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+	 * Resulting vectors lie on a sphere.
+	 * Points xs and -xs represent the same 2d point. Can be used in oriented projective geometry
+	 * to distinguish between lines with different orientation.
+	 * @returns {HPointArray} out
+	 */
+	sphericalNormalization() {
+	  if ( !this.isNormalizedSpherical ) this.normalize(this);
+	  return this;
+	}
+	
   /**
    * Dot product of this point with another.
    * @param {HPointArray} other
@@ -742,7 +841,7 @@ export class PointArray {
   // ----- NOTE: Static Cross ----- //
 
   /**
-   * X dimensional cross, or "perpendicular":
+   * Generalized X dimensional cross, or "perpendicular":
    * https://math.stackexchange.com/questions/2371022/cross-product-in-higher-dimensions
    * Uses determinants.
    * @param {PointArrayAbstract} p1
@@ -782,26 +881,39 @@ export class PointArray {
     return this._cross(vectors, out);
   }
 
-  static _cross(vectors = [], out) {
+  /**
+   * Generalized X dimensional cross.
+   * @param {PointArrayAbstract[]} points
+   * @param {PointArrayAbstract} [out]
+   * @returns {PointArrayAbstract}
+   */
+  static _cross(points = [], out) {
     // Use determinants for higher dimensions.
     // E.g, for 4 dimensions, need 4 determinants from 3 vectors:
     // {t1,..., t4}, {u1, ..., u4}, {v1, ..., v4}
     // a1 = |2, 3, 4|, a2 = |1, 3, 4|, a3 = |1, 2, 4|, a4 = |1, 2, 3|
 
-    const p0 = vectors[0];
+    const p0 = points[0];
     const nDims = p0.DIMS;
     const fullDims = nDims + 1;
-    using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
-    for ( let i = 0; i < nDims; i += 1 ) mat.setColumn(i, vectors[i].arr);
+    out ||= this.create(nDims);
 
-    // Get the 3x3 determinant of each combination of the 3x4 matrix.
+    // Create the minor matrix (n-1 rows, n columns)
+    using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
+    for ( let i = 0; i < nDims; i += 1 ) mat.setRow(i, points[i].arr);
+
+    // Use Cramer's rule-style minors.
     using matDet = HGEOM.Matrix.create(nDims, nDims); // E.g., 3x3
+    let sign = 1;
     for ( let colToOmit = 0; colToOmit < fullDims; colToOmit += 1 ) {
       mat.dropColumn(colToOmit, matDet);
-      out.arr[colToOmit] = matDet.determinant();
-      if ( isOddFast(colToOmit) ) out.arr[colToOmit] *= -1;
+      const val = matDet.determinant();
+
+      // Apply alternating sign. +,-,+,-. Depending on handedness, this may be reversed.
+      out.arr[colToOmit] = val * sign;
+      sign *= -1;
     }
-    return out;
+    return out; // Dual representation. Cross product of n-1 points in n-space results in hyperplane, not localized coordinate.
   }
 
   /**
@@ -855,6 +967,8 @@ export class PointArray {
     return a.dot(xBC);
   }
 }
+
+
 
 /**
  * Two choices: Either subclass with the Pool mixin, or create a new mixin to be
@@ -956,5 +1070,9 @@ export class HPointAbstract extends mix(PointArray).with(PoolableMixin) {
     return this.create.set(...args);
   }
 }
+
+// ----- NOTE: Aliases ----- //
+
+
 
 function isOddFast(n) { return (n & 1) === 1; }

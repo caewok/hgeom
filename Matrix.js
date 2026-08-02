@@ -98,12 +98,24 @@ class MatrixAbstract {
    * @returns {Matrix} New matrix
    */
   dropRow(row = 0, out) {
-    const nrow = this.nrow;
-    out ||= this.constructor.create(nrow -1, this.ncol);
-    for ( let i = 0; i < nrow; i += 1 ){
-      if ( i === row ) continue;
-      out.setRow([...this.iterateRow(i)]);
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow - 1, ncol);
+    const a = this.arr;
+    const b = out.arr;
+    
+    // Set everything before the row to omit.
+    if ( row > 0 ) {
+      const idx = this._idx(row, 0); // Slice does not include the last index, so add 1 to include row - 1, col - 1.
+      b.set(a.slice(0, idx), 0);
     }
+    
+    // Set everything after the row to omit.
+    if ( row < (nrow - 1) ) {
+      const idx = this._idx(row + 1, 0);
+      const newIdx = out._idx(row, 0);
+      b.set(a.slice(idx), newIdx);
+    }
+    
     return out;
   }
 
@@ -114,16 +126,85 @@ class MatrixAbstract {
    * @returns {Matrix} New matrix
    */
   dropColumn(col = 0, out) {
-    const ncol = this.ncol;
-    out ||= this.constructor.create(this.nrow, ncol -1);
-    for ( let i = 0; i < ncol; i += 1 ){
-      if ( i === col ) continue;
-      out.setColumn([...this.iterateColumn(i)]);
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow, ncol - 1);
+    
+    // For speed, set as much data linearly as possible; don't use setColumn method repeatedly.
+    // Process each row in turn.
+    const a = this.arr;
+    const b = out.arr;
+    for ( let r = 0; r < nrow; r += 1 ) {
+      const aColIdx = this._idx(r, col);
+      const bColIdx = out._idx(r, col);
+        
+      // Set everything for this row before the dropped column.
+      if ( col > 0 ) b.set(a.slice(aColIdx - col, aColIdx), bColIdx - col);
+      
+      // Set everything for this row after the dropped column.
+      if ( col < ncol ) b.set(a.slice(aColIdx + 1, aColIdx + ncol - col), bColIdx);
     }
     return out;
   }
 
+  /**
+   * Return a new matrix that adds a specific row to this matrix.
+   * @param {TypedArray|number[]}		Row data to add
+   * @param {number} row            Row number to insert. 0 will insert first, 1 after row 0, ...
+   * @param {Matrix} out            Out matrix
+   * @returns {Matrix} New matrix
+   */
+  addRow(row, data = [], out) {
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow + 1, ncol);
+    const a = this.arr;
+    const b = out.arr;
+    const aRowIdx = this._idx(row, 0)
+    
+    // Set everything before the row to add.
+    if ( row > 0 ) b.set(a.slice(0, aRowIdx), 0);
+    
+    // Add the row data.
+    b.set(data, aRowIdx);
+    
+    // Set everything after the row to add, bumping each row down one.
+    if ( row < nrow ) {
+      const newIdx = out._idx(row + 1, 0);
+      b.set(a.slice(aRowIdx), newIdx);
+    }
+    return out;
+  }
 
+  /**
+   * Return a new matrix that adds a specific column to this matrix.
+   * @param {TypedArray|number[]}		Column data to add
+   * @param {number} col            Column number to insert
+   * @param {Matrix} out            Out matrix
+   * @returns {Matrix} New matrix
+   */
+  addColumn(col, data = [], out) {
+    const { nrow, ncol } = this;
+    out ||= this.constructor.create(nrow, ncol + 1);
+    
+    // For speed, set as much data linearly as possible; don't use setColumn method repeatedly.
+    // Process each row in turn.
+    const a = this.arr;
+    const b = out.arr;
+    for ( let r = 0; r < nrow; r += 1 ) {
+      // Set everything for this row before the new column.
+      const aColIdx = this._idx(r, col);
+      const bColIdx = out._idx(r, col);
+      
+      // Add in the new data.
+      if ( col > 0 ) b.set(a.slice(aColIdx - col, aColIdx), bColIdx - col, bColIdx);
+      
+      // Add the column data for this row.
+      b[bColIdx] = data[r];
+            
+      // Set everything for this row after the new column.
+      if ( col < ncol ) b.set(a.slice(aColIdx, aColIdx - col + ncol), bColIdx + 1);
+    }
+    return out;
+  }
 
   // ----- NOTE: Iterators ----- //
 
@@ -348,7 +429,7 @@ class MatrixAbstract {
    * @returns {MatrixAbstract}
    */
   static fromHPoint(p) {
-    const out = super.create();
+    const out = new this();
     out.nrow = 1;
     out.ncol = p.DIMS + 1;
     out.arr = p.arr;
@@ -419,6 +500,40 @@ class MatrixAbstract {
     out._setElements((elem, i) => this.arr[i]);
     return out;
   }
+  
+  // ----- NOTE: Equality ----- //
+  
+  /**
+   * Does this matrix equal another?
+   * @param {Matrix} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if ( !(this.nrow === other.nrow && this.ncol === other.ncol) ) return false;
+    const a = this.arr;
+    const b = other.arr;
+    for ( let i = 0, n = this.arr.length; i < n; i += 1 ) {
+      if ( a[i] !== b[i] ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Does this matrix almost equal another?
+   * @param {Matrix} other
+   * @param {number} epsilon
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    if ( !(this.nrow === other.nrow && this.ncol === other.ncol) ) return false;
+    const a = this.arr;
+    const b = other.arr;
+    for ( let i = 0, n = this.arr.length; i < n; i += 1 ) {
+      if ( !a[i].almostEqual(b[i], epsilon) ) return false;
+    }
+    return true;
+  }  
+  
 
   // ----- NOTE: Transformation ----- //
 
@@ -799,14 +914,14 @@ class MatrixAbstract {
   }
 
   /**
-   * Combine rotation matrixes for x, y, and z.
+   * Combine rotation matrixes for x, y, and z. If z is defined, will create a 4x4 matrix.
    * @param {number} angleX   Radians
    * @param {number} angleY   Radians
    * @param {number} angleZ   Radians
-   * @param {boolean} [d3 = true]    If d3, use a 4-d matrix. Otherwise, 3-d matrix.
    * @returns {Matrix}
    */
-  static rotationXYZ({ angleX, angleY, angleZ, d3 = true, out } = {}) {
+  static rotationXYZ({ x: angleX, y: angleY, z: angleZ } = {}, out) {
+    const d3 = typeof angleZ === "undefined" && !(out && Object.hasOwn(out, "z"));
     out = angleX ? this.rotationX(angleX, d3, out) : angleY
       ? this.rotationY(angleY, d3, out) : angleZ
         ? this.rotationZ(angleZ, d3, out) : out.identity();
@@ -823,7 +938,7 @@ class MatrixAbstract {
     return out;
   }
 
-  static translation({ x = 0, y = 0, z, out } = {}) {
+  static translation({ x = 0, y = 0, z } = {}, out) {
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();
@@ -845,7 +960,7 @@ class MatrixAbstract {
     return out;
   }
 
-  static scale({ x = 1, y = 1, z, out } = {}) {
+  static scale({ x = 1, y = 1, z } = {}, out) {
     const n = typeof z === "undefined" ? 3 : 4;
     out ||= this.empty(n);
     out.identity();

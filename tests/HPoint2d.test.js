@@ -3,9 +3,14 @@ HGEOM,
 */
 "use strict";
 
+function orient2dFast(a, b, c) {
+  return (a.y - c.y) * (b.x - c.x) - (a.x - c.x) * (b.y - c.y);
+}
+
 export function runTests(context) {
   const { describe, it, expect } = context;
   const HPoint2d = HGEOM.HPoint2d;
+  const Matrix = HGEOM.Matrix;
 
   describe("HPointAbstract & Memory Management", () => {
 
@@ -90,12 +95,62 @@ export function runTests(context) {
       pt.release();
     });
 
-    it("should calculate 2D cross product (determinant)", () => {
+    it("should calculate cross product (determinant)", () => {
       const p1 = HPoint2d.build(1, 0, 1);
       const p2 = HPoint2d.build(0, 1, 1);
+      const expectedRes = HPoint2d.build(-1, -1, 1);
       // (1*1) - (0*0) = 1
-      expect(HPoint2d.cross2d(p1, p2)).to.equal(1);
-      HPoint2d.release(p1, p2);
+      expect(p1.cross(p2).equals(expectedRes)).to.be.true;
+      HPoint2d.release(p1, p2, expectedRes);
+    });
+
+    it("should calculate the 2D cross product (determinant) correctly", () => {
+      const p1 = HPoint2d.build(2, 0, 1);
+      const p2 = HPoint2d.build(0, 2, 1);
+      const result = HPoint2d.cross2d(p1, p2);
+
+      // (2*2 - 0*0) / (1*1) = 4
+      expect(result).to.equal(4);
+    });
+
+    it("should calculate orientation", () => {
+      const a = HPoint2d.build(0, 0, 1);
+      const b = HPoint2d.build(1, 0, 1);
+      const c = HPoint2d.build(0, 1, 1);
+
+      // Testing a point (d) relative to the line formed by a, b
+      const orientation = c.orient(a, b);
+      expect(orientation).to.not.equal(0);
+
+      const cO = HPoint2d.cOrient(a, b, c);
+      expect(cO).to.equal(orientation);
+    });
+
+    it("should calculate orientation like Foundry", () => {
+      const a = HPoint2d.build(0, 0, 1);
+      const b = HPoint2d.build(1, 0, 1);
+      const c = HPoint2d.build(0, 1, 1);
+
+      // Testing a point (d) relative to the line formed by a, b
+      const orientation = c.orient(a, b);
+      const fO = orient2dFast(a, b, c);
+      expect(orientation).to.equal(fO);
+
+      const cO = HPoint2d.cOrient(a, b, c);
+      expect(cO).to.equal(fO);
+    });
+  });
+
+  describe("Transform", () => {
+    it("should translate a point correctly", () => {
+      const translate = Matrix.translation({ x: 10, y: 20 });
+      const pt = HPoint2d.newInstance;
+      const result = pt.transform(translate);
+      expect(result.x).to.equal(10);
+      expect(result.y).to.equal(20);
+      expect(result.w).to.equal(1);
+      pt.release();
+      translate.release();
     });
   });
 

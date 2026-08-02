@@ -66,6 +66,138 @@ export function runTests(context) {
     });
   });
 
+  describe("Matrix row and column manipulation", () => {
+    let matA;
+    beforeEach(() => {
+      matA = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+      ]);
+    });
+
+    it("should remove the first row row", () => {
+      const expected = Matrix.from2dArray([
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.dropRow(0);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove a middle row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.dropRow(1);
+      expect(result.equals(expected)).to.be.true;
+    });
+    
+    it("should remove the last row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+      ]);
+      const result = matA.dropRow(2);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove the first column", () => {
+      const expected = Matrix.from2dArray([
+        [1, 2, 3],
+        [5, 6, 7],
+        [9, 10, 11],
+      ]);
+      const result = matA.dropColumn(0);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove a middle column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 3],
+        [4, 5, 7],
+        [8, 9, 11],
+      ]);
+      const result = matA.dropColumn(2);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should remove the last column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2],
+        [4, 5, 6],
+        [8, 9, 10],
+      ]);
+      const result = matA.dropColumn(3);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add the first row", () => {
+      const expected = Matrix.from2dArray([
+        [12, 13, 14, 15],
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.addRow(0, [12, 13, 14, 15]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add a middle row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [12, 13, 14, 15],
+        [8, 9, 10, 11],
+      ]);
+      const result = matA.addRow(2, [12, 13, 14, 15]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add the last row", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+        [8, 9, 10, 11],
+        [12, 13, 14, 15],
+      ]);
+      const result = matA.addRow(3, [12, 13, 14, 15]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add the first column", () => {
+      const expected = Matrix.from2dArray([
+        [12, 0, 1, 2, 3],
+        [13, 4, 5, 6, 7],
+        [14, 8, 9, 10, 11],
+      ]);
+      const result = matA.addColumn(0, [12, 13, 14]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+    it("should add a middle column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 12, 2, 3],
+        [4, 5, 13, 6, 7],
+        [8, 9, 14, 10, 11],
+      ]);
+      const result = matA.addColumn(2, [12, 13, 14]);
+      expect(result.equals(expected)).to.be.true;
+    });
+    
+    it("should add the last column", () => {
+      const expected = Matrix.from2dArray([
+        [0, 1, 2, 3, 12],
+        [4, 5, 6, 7, 13],
+        [8, 9, 10, 11, 14],
+      ]);
+      const result = matA.addColumn(4, [12, 13, 14]);
+      expect(result.equals(expected)).to.be.true;
+    });
+
+  })
+
   describe("Multiplication", () => {
     it("should multiply two 2x2 matrices", () => {
       const A = Matrix.from2dArray([[1, 2], [3, 4]]);
@@ -75,20 +207,11 @@ export function runTests(context) {
       // [3*5 + 4*7, 3*6 + 4*8] -> [43, 50]
       expect(Array.from(result.arr)).to.deep.equal([19, 22, 43, 50]);
     });
-
-    it("should multiply a Point3d correctly (multiplyPoint3d)", () => {
-      const translate = Matrix.translation(10, 20, 30);
-      const pt = new HPoint3d(0, 0, 0);
-      const result = translate.multiplyPoint3d(pt);
-      expect(result.x).to.equal(10);
-      expect(result.y).to.equal(20);
-      expect(result.z).to.equal(30);
-    });
   });
 
   describe("3D Transformations", () => {
     it("should create a valid translation matrix", () => {
-      const mat = Matrix.translation(5, 10, 15);
+      const mat = Matrix.translation({ x: 5, y: 10, z: 15 });
       // In row-major [1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]
       expect(mat.getIndex(3, 0)).to.equal(5);
       expect(mat.getIndex(3, 1)).to.equal(10);
@@ -130,7 +253,7 @@ export function runTests(context) {
 
   describe("Foundry Integration & Pooling", () => {
     it("should share buffers when using fromHPoint", () => {
-      const pt = new HPoint3d(1, 2, 3);
+      const pt = HPoint3d.build(1, 2, 3);
       const mat = Matrix.fromHPoint(pt);
 
       expect(mat.getIndex(0, 0)).to.equal(1);

@@ -30,7 +30,6 @@ export class AABB3d extends AABB {
   static fromPolygon3d(poly, out) {
     // Iterating the points will determine the min/max values.
     out ||= this.newInstance;
-    out._clear();
     const { min, max } = out;
     for ( const pt of poly.iteratePoints() ) {
       if ( pt.w !== 1 ) pt.perspectiveDivide(pt);
@@ -56,7 +55,8 @@ export class AABB3d extends AABB {
    * @param {number} y;
    */
   contains(x, y, z) {
-    return this.containsPoint({ x, y, z });
+    using pt = Point3d.build(x, y, z, 1);
+    return this.containsPoint(pt);
   }
 }
 

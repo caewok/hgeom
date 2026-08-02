@@ -47,6 +47,28 @@ export class HPoint3d extends HPointAbstract {
 
   set _z(value) { this.arr[2] = value; }
 
+  /**
+   * Copy points from a given object.
+   * If the object contains w, will copy directly.
+   * Otherwise will set x and y, setting w to 1.
+   * @param {object}
+   * @returns {HPoint2d}
+   */
+  copyFrom(obj, out) {
+    super.copyFrom(obj, out);
+
+    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+
+    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+
+    if ( Object.hasOwn(obj, "_z") ) out._z = obj._z;
+    else if ( Object.hasOwn(obj, "z") ) out._z = obj.z;
+
+    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+  }
+
 
   toString() { return `x: ${this.x.toFixed(2)}, y: ${this.y.toFixed(2)}, z: ${this.z.toFixed(2)}, w: ${this.w.toFixed(2)}`; }
 
@@ -61,14 +83,35 @@ export class HPoint3d extends HPointAbstract {
 
   /**
    * Generalized cross product of this point with two other 3d homogeous points.
+   * @param {HPoint3d} a
    * @param {HPoint3d} b
-   * @param {HPoint3d} c
    * @param {HPoint3d} [out]
    * @returns {HPoint3d}
    */
-  cross(b, c, out) {
+  cross(a, b, out) {
     out ||= this.constructor.newInstance;
-    return this.constructor.cross([this, b, c], out);
+    return this.constructor._cross([a, b, this], out);
+  }
+
+  /**
+   * Cross two 3d vectors by ignoring the w value.
+   */
+  static crossVectors(p0, p1, out) {
+    out ||= this.newInstance;
+    out.w = 0;
+    // Avoid overwriting if out point is this or other.
+    const x = this.cross2d(p0, p1, 1, 2);
+    const y = this.cross2d(p0, p1, 2, 0);
+    const z = this.cross2d(p0, p1, 0, 1);
+    out.arr[0] = x;
+    out.arr[1] = y;
+    out.arr[2] = z;
+    return out;
+  }
+
+  static scalarTripleVectors(a, b, c) {
+    using xBC = this.crossVectors(b, c);
+    return a.dot(xBC);
   }
 
   /*
@@ -83,12 +126,34 @@ export class HPoint3d extends HPointAbstract {
   * @returns {number}
   */
   orient(a, b, c) {
-    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
+    // Y is reversed so must negate.
+    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
 
     // Could create a plane:
     // Plane.fromPoints(a, b, c).orient(this).
     // For performance, calculate directly using the scalar triple.
     // Could also take the determinate of the 4 x 4 matrix
+    using vA = a.subtract(this);
+    using vB = b.subtract(this);
+    using vC = c.subtract(this);
+    return this.constructor.scalarTripleVectors(vA, vB, vC);
+
+    /* To get the determinant:
+    using xABC = a.cross(b, c);
+    return -xABC.dot(this);
+    */
+  }
+
+  /**
+   * Orient using the determinant for testing.
+   */
+  orientWithDet(a, b, c) {
+    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
+    
+    a.euclideanNormalization();
+    b.euclideanNormalization();
+    c.euclideanNormalization();
+    this.euclideanNormalization();
     using xABC = a.cross(b, c);
     return xABC.dot(this);
   }

@@ -1,0 +1,4 @@
+To use in module:
+
+import { registerHGEOM } from "./hgeom/registration.js";
+registerHGEOM();

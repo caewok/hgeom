@@ -81,11 +81,57 @@ export class Polygon3d {
     }
     return this.#plane;
   }
-
-  _calculatePlane(plane) {
-
+  
+  set plane(value) { 
+    this.#plane = value; 
+    this.#dirtyPlane = false;
   }
 
+  _calculatePlane(plane) {
+    
+  
+    Plane.fromPoints(this.points[0], this.points[1], this.points[2], plane); 
+  }
+
+  // ----- NOTE: Clean collinear points ----- //
+  
+  /**
+   * Remove collinear points.
+   */
+  #cleaned = false;
+  
+  // TODO: 3 points in 3d can form a line. Different than orienting a point against a plane of 3 points.
+  // How to test this collinearity?
+  
+  clean() {
+    if ( this.#cleaned || this.points.length < 2 ) return;
+
+    const points = this.iteratePoints();
+    const result = [points.next().value];
+    for ( const curr of points ) {  
+      while ( result.length >= 2 && result.at(-2).orient(result.at(-1), curr) result.pop().release();        
+      result.push(curr);
+    }
+
+    // Clean up where end meets beginning.
+    // Loop b/c removing a point at a seam may expose a new collinearity.
+    while ( result.length >= 3 ) {
+      // Is the last point redundant? (2nd-to-last -> last -> first)
+      if ( result.at(-2).orient(result.at(-1), result[0]) ) result.pop().release();
+            
+      // Is the first point redundant? (Last -> first -> second)
+      else if ( result.at(-1).orient(result.at(0), result[1]) ) result.shift().release(); // Remove the first point.
+    }
+
+    if ( result.length < this.points.length ) {
+      // Store a new buffer array of points and delete the old.
+      const oldPoints = this.points;
+      this.points = Point3d.allocateNObjects(result.length);
+      this.points.forEach((pt, idx) => pt.copyFrom(result[idx]));
+      oldPoints.forEach(pt => pt.release());
+    }
+    this.#cleaned = true;  
+  }
 
   // ----- NOTE: Centroid calculation ----- //
 
@@ -165,14 +211,14 @@ export class Polygon3d {
   /**
    * Construct a new polygon, copying the coordinates of an array of points.
    * @param {Point3d[]} pts
-   * @param {}
-   * @returns {Polygon2d}
+   * @param {Plane} [plane]
+   * @returns {Polygon3d}
    */
   static fromPoints(pts, plane) {
     const n = pts.length;
     const poly = this.create(n);
     for ( let i = 0; i < n; i += 1 ) poly.points[i].copyFrom(pts[i]);
-    poly.plane.copyFrom(plane);
+    if ( plane ) poly.plane.copyFrom(plane);
     return poly;
   }
 
@@ -180,12 +226,13 @@ export class Polygon3d {
    * Construct a new polygon, using an existing array of points directly.
    * The array is copied directly, so modifying the array will change the polygon.
    * @param {Point3d[]} pts
-   * @returns {Polygon2d}
+   * @param {Plane} [plane	]
+   * @returns {Polygon3d}
    */
   static withPoints(pts, plane) {
     const poly = new this(0);
     poly.points = pts;
-    poly.plane = plane;
+    if ( plane ) poly.plane = plane;
     return poly;
   }
 

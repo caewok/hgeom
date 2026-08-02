@@ -38,6 +38,27 @@ export class HPoint2d extends HPointAbstract {
 
   set _y(value) { this.arr[1] = value; }
 
+  // ----- NOTE: Copying ----- //
+
+  /**
+   * Copy points from a given object.
+   * If the object contains w, will copy directly.
+   * Otherwise will set x and y, setting w to 1.
+   * @param {object}
+   * @returns {HPoint2d}
+   */
+  copyFrom(obj, out) {
+    super.copyFrom(obj, out);
+
+    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+
+    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+
+    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+  }
+
   // ----- NOTE: PIXI conversion ----- //
 
   /**
@@ -81,6 +102,8 @@ export class HPoint2d extends HPointAbstract {
     return out;
   }
 
+
+
   /*
   2d cross product indicates orientation of a vector: ax*by - ay*bx
   • C > 0: b is "left", CCW
@@ -92,13 +115,35 @@ export class HPoint2d extends HPointAbstract {
   • D = 0: vectors are perpendicular
   angle between is cos-1(a•b / |a|•|b|) where || is magnitude
   */
+
+  /**
+   * Orientation of this point/vector with regard to two points or a vector
+   * @param {HPoint2d} a
+   * @param {HPoint2d} [b]        Used only if this is a point
+   * @returns {number}
+   */
   orient(a, b) {
-    if ( this.isVector ) return this.constructor.cross2d(this, a);
+    // Y is reversed, so must negate the orientation.
+    if ( this.isVector ) return -this.constructor.cross2d(this, a);
 
     // Could create a line:
     // Line2d.fromPoints(a, b).orient(this).
     // For performance, calculate directly using the scalar triple.
-    return this.constructor.scalarTriple(a, b, this);
+    return -this.constructor.scalarTriple(a, b, this);
+  }
+
+  /**
+   * 2d cross product, which indicates orientation.
+   * Cartesian version.
+   * @param {HPoint2d} a
+   * @param {HPoint2d} b
+   * @param {HPoint2d} c
+   * @returns {number}
+   */
+  static cOrient(a, b, c) {
+    using dxAB = b.subtract(a);
+    using dxAC = c.subtract(a);
+    return -this.cross2d(dxAB, dxAC);
   }
 
   /**
