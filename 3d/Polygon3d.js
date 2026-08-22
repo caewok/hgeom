@@ -81,35 +81,35 @@ export class Polygon3d {
     }
     return this.#plane;
   }
-  
-  set plane(value) { 
-    this.#plane = value; 
+
+  set plane(value) {
+    this.#plane = value;
     this.#dirtyPlane = false;
   }
 
   _calculatePlane(plane) {
-    
-  
-    Plane.fromPoints(this.points[0], this.points[1], this.points[2], plane); 
+
+
+    Plane.fromPoints(this.points[0], this.points[1], this.points[2], plane);
   }
 
   // ----- NOTE: Clean collinear points ----- //
-  
+
   /**
    * Remove collinear points.
    */
   #cleaned = false;
-  
+
   // TODO: 3 points in 3d can form a line. Different than orienting a point against a plane of 3 points.
   // How to test this collinearity?
-  
+
   clean() {
     if ( this.#cleaned || this.points.length < 2 ) return;
 
     const points = this.iteratePoints();
     const result = [points.next().value];
-    for ( const curr of points ) {  
-      while ( result.length >= 2 && result.at(-2).orient(result.at(-1), curr) result.pop().release();        
+    for ( const curr of points ) {
+      while ( result.length >= 2 && result.at(-2).orient(result.at(-1), curr) ) result.pop().release();
       result.push(curr);
     }
 
@@ -118,7 +118,7 @@ export class Polygon3d {
     while ( result.length >= 3 ) {
       // Is the last point redundant? (2nd-to-last -> last -> first)
       if ( result.at(-2).orient(result.at(-1), result[0]) ) result.pop().release();
-            
+
       // Is the first point redundant? (Last -> first -> second)
       else if ( result.at(-1).orient(result.at(0), result[1]) ) result.shift().release(); // Remove the first point.
     }
@@ -130,7 +130,7 @@ export class Polygon3d {
       this.points.forEach((pt, idx) => pt.copyFrom(result[idx]));
       oldPoints.forEach(pt => pt.release());
     }
-    this.#cleaned = true;  
+    this.#cleaned = true;
   }
 
   // ----- NOTE: Centroid calculation ----- //

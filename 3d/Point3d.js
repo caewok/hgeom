@@ -5,6 +5,7 @@
 "use strict";
 
 import { HPoint3d } from "./HPoint3d.js";
+import { Line3d } from "./Line3d.js";
 
 // See // https://faculty.sites.iastate.edu/jia/files/inline-files/homogeneous-coords.pdf
 
@@ -34,15 +35,14 @@ export class Point3d extends HPoint3d {
    * @returns {number}
    */
   orient(a, b, c) {
-    if ( c ^ !c.isVector ) throw Error(`${this.constructor.name}|orient requires 3 points or 2 vectors`);
     if ( c ) {
+      if ( c.isVector ) throw Error(`${this.constructor.name}|orient requires 3 points or 2 vectors`);
       using v1 = b.clone().subtract(a);
       using v2 = c.clone().subtract(a);
       using v3 = this.clone().subtract(a);
       return this.constructor.scalarTriple(v1, v2, v3);
     }
     return this.constructor.scalarTriple(a, b, this);
-
   }
 
 

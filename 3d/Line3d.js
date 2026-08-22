@@ -88,7 +88,7 @@ export class Line3d {
   static fromRay(rayOrigin, rayDirection, out) {
     // TODO: Is there a faster method? Can copy direction directly but
     //   still need b to calculate the moment unless there is a shortcut.
-    using b = rayOrigin.add(rayDirection);
+    using b = rayOrigin.add(rayDirection.clone());
     return this.fromPoints(rayOrigin, b, out);
   }
 
