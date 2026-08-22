@@ -1,5 +1,5 @@
 /* globals
-
+PIXI,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
@@ -14,7 +14,7 @@
  * @param {number} [e=1e-08]      Epsilon
  * @returns {boolean}
  */
-function almostEqual(n, e = 1e-08) { return Math.abs(this - n) < e; }
+export function almostEqual(n, e = 1e-08) { return Math.abs(this - n) < e; }
 
 /**
  * Is this number almost less than another? I.e., it is less than or almost equal.
@@ -22,7 +22,7 @@ function almostEqual(n, e = 1e-08) { return Math.abs(this - n) < e; }
  * @param {number} [e=1e-08]      Epsilon
  * @returns {boolean}
  */
-function almostLessThan(n, epsilon = 1e-06) { return this < n || this.almostEqual(n, epsilon); }
+export function almostLessThan(n, epsilon = 1e-06) { return this < n || this.almostEqual(n, epsilon); }
 
 /**
  * Is this number almost greater than another? I.e., it is greater than or almost equal.
@@ -30,7 +30,7 @@ function almostLessThan(n, epsilon = 1e-06) { return this < n || this.almostEqua
  * @param {number} [e=1e-08]      Epsilon
  * @returns {boolean}
  */
-function almostGreaterThan(n, epsilon = 1e-06) { return this > n || this.almostEqual(n, epsilon); }
+export function almostGreaterThan(n, epsilon = 1e-06) { return this > n || this.almostEqual(n, epsilon); }
 
 /**
  * Is this number between two others?
@@ -39,7 +39,7 @@ function almostGreaterThan(n, epsilon = 1e-06) { return this > n || this.almostE
  * @param {boolean} [inclusive=true]
  * @returns {boolean}
  */
-function between(a, b, inclusive=true) {
+export function between(a, b, inclusive=true) {
   const min = Math.min(a, b);
   const max = Math.max(a, b);
   return inclusive ? (this >= min) && (this <= max) : (this > min) && (this < max);
@@ -53,7 +53,7 @@ function between(a, b, inclusive=true) {
  * @param {number} [e=1e-08]      Epsilon
  * @returns {boolean}
  */
-function almostBetween(a, b, epsilon = 1e-06) {
+export function almostBetween(a, b, epsilon = 1e-06) {
   const min = Math.min(a, b);
   const max = Math.max(a, b);
   return this.almostLessThan(max, epsilon) && this.almostGreaterThan(min, epsilon);
@@ -71,7 +71,7 @@ if ( !Object.hasOwn(Number.prototype, "almostBetween") ) Number.prototype.almost
  * Iterate over the PIXI polygon's {x, y} points in order.
  * @returns {PIXI.Point} Each point returned is distinct.
  */
-function* iteratePoints() {
+export function* iteratePoints() {
   const ln = this.points.length;
   if ( ln < 2 ) return;
   for (let i = 0; i < ln; i += 2) yield new PIXI.Point(this.points[i], this.points[i + 1]);
@@ -80,3 +80,5 @@ function* iteratePoints() {
 if ( Object.hasOwn(globalThis, "PIXI") ) {
   if ( !Object.hasOwn(PIXI.Polygon.prototype, "iteratePoints") ) PIXI.Polygon.iteratePoints = iteratePoints;
 }
+
+export function isOddFast(n) { return (n & 1) === 1; }
