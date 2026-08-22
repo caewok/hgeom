@@ -1,4 +1,4 @@
-i/* globals
+/* globals
 HGEOM,
 */
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
@@ -156,7 +156,7 @@ export class PointArray {
     const a = p1.arr;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
       out.arr[i] = a[i];
-      for ( const pt of pts ) out.arr[i] += pts.arr[i];
+      for ( const pt of pts ) out.arr[i] += pt.arr[i];
     }
     return out;
   }
@@ -191,12 +191,12 @@ export class PointArray {
     out ||= this.create(nDims);
     const a = p1.arr;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i] * b[i];
+      out.arr[i] = a[i] * pts[i];
       for ( const pt of pts ) out.arr[i] *= pt;
     }
     return out;
   }
-  
+
   /**
    * Divide a point vector to this one, elementwise.
    * @param {PointArrayAbstract} [out]   The object in which to store the result.
@@ -209,7 +209,7 @@ export class PointArray {
     out ||= this.create(nDims);
     const a = p1.arr;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i] * b[i];
+      out.arr[i] = a[i] * pts[i];
       for ( const pt of pts ) out.arr[i] /= pt;
     }
     return out;
@@ -597,7 +597,7 @@ export class PointArray {
     // GCD
     // Like cSubtract, but skipping a few steps.
     if ( pts.length ) {
-      [other, ...pts].forEach(pt => this.subtract(pt);
+      [other, ...pts].forEach(pt => this.subtract(pt));
       return this;
     }
     const nDims = this.DIMS;
@@ -606,8 +606,8 @@ export class PointArray {
     const m1 = this.w;
     const m2 = other.w;
     for ( let i = 0, n = nDims; i < n; i += 1 ) this.arr[i] = (a[i] * m2) - (b[i] * m1);
+    this.w = 0;
     return this;
-    out.w = 0;
   }
 
   /**
@@ -634,6 +634,7 @@ export class PointArray {
     const w = pt.w;
     for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
+  }
 
   applyElementWise(callback) { return this.constructor.applyElementWise(this, callback, this); }
 
@@ -654,7 +655,7 @@ export class PointArray {
     for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
     return out;
   }
-  
+
   applyCoordinateWise(callback) { return this.constructor.applyCoordinateWise(this, callback, this); }
 
   // ----- NOTE: Equality ----- //
@@ -707,12 +708,12 @@ export class PointArray {
    */
   static transform(pt, M, out) {
     out ||= this.constructor.create(this.DIMS);
-    using mPoint = Matrix.fromHPoint(this);
-    using mOut = Matrix.fromHPoint(out); // Will share the array.
+    using mPoint = M.constructor.fromHPoint(this);
+    using mOut = M.constructor.fromHPoint(out); // Will share the array.
     mPoint.multiply(M, mOut);
     return out;
   }
-  
+
   transform(M) { return this.constructor.transform(this, M, this); }
 
   // ----- NOTE: Vectorize ----- //
@@ -761,14 +762,13 @@ export class PointArray {
    */
   perspectiveDivide() {
     if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
-    out ||= this.constructor.newInstance;
     this.multiplyScalar(1/this.w);
     return this;
   }
-  
+
 	/**
 	 * Euclidean normalization. Point w set to 1.
-	 * Perspective divides the point in place. 
+	 * Perspective divides the point in place.
 	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
 	 * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
 	 * @returns {HPointArray} out
@@ -777,7 +777,7 @@ export class PointArray {
 	  if ( !(this.isVector || this.isNormalizedEuclidean) ) this.perspectiveDivide(this);
 	  return this;
 	}
-	
+
 	/**
 	 * Spherical normalization. Point or vector normalized to 1.
 	 * Done in place.
@@ -791,7 +791,7 @@ export class PointArray {
 	  if ( !this.isNormalizedSpherical ) this.normalize(this);
 	  return this;
 	}
-	
+
   /**
    * Dot product of this point with another.
    * @param {HPointArray} other
@@ -1082,9 +1082,3 @@ export class HPointAbstract extends mix(PointArray).with(PoolableMixin) {
     return this.create.set(...args);
   }
 }
-
-// ----- NOTE: Aliases ----- //
-
-
-
-function isOddFast(n) { return (n & 1) === 1; }
