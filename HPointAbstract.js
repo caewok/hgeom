@@ -39,9 +39,12 @@ export class HPointAbstract {
   /**
    * A view of the underlying buffer.
    * For consistency with Pooled classes.
-   * @type {Float32Array[this.constructor.DIMS]}
+   * @type {Float32Array[this.DIMS]}
    */
-  get arr() { return this._buffer; }
+  get arr() {
+    if ( !~this._offset ) return new Array(this.DIMS);
+    return new Float32Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
+  }
 
   /**
    * Set all values for this point.
@@ -59,9 +62,8 @@ export class HPointAbstract {
    * @returns {HPointAbstract} The out object
    */
   clone(out) {
-    // If out is not provided, use the same memory type as this object.
-    out ||= this._isScratch ? this.constructor.createScratch(this.DIMS) : this.constructor.create(this.DIMS);
-    out._buffer.set(this.arr, this._offset);
+    out ||= this.constructor.create(this.DIMS);
+    out._buffer.set(this._buffer.subarray(this._offset, this._offset + this.DIMS), out._offset);
     return out;
   }
 
@@ -71,7 +73,7 @@ export class HPointAbstract {
    * @returns {this}
    */
   copyFrom(other) {
-    this._buffer.set(other.arr, this._offset);
+    this._buffer.set(other._buffer.subarray(other._offset, other._offset + other.DIMS), this._offset);
     return this;
   }
 
@@ -100,11 +102,22 @@ export class HPointAbstract {
   // ----- NOTE: Static creation ----- //
 
   /**
-   * Create a new point. Meant to be overridden using pooling, but kept here for testing.
+   * Create a new point.
    * @param {number} nDims            Number of dimensions
    * @returns {HPointAbstract}
    */
-  static create(nDims = 4) { return new this(nDims); }
+  static create(nDims = 4) {
+    const out = new this(nDims);
+    out._init();
+    return out;
+  }
+
+  /**
+   * Create a new point and set its value. Dimensions inferred by the argument (must set w as well).
+   * @param {number} ...
+   * @returns {HPointAbstract}
+   */
+  static build(...args) { return this.create(args.length).set(...args); }
 
   /**
    * Create a new point with zero values but for the 1 at the end.
@@ -694,8 +707,8 @@ export class HPointAbstract {
 
     // Treat as cross 2d
     if ( nDims === 1 && vectors.length === 2 ) {
-      out.arr[0] = this.cross2d(p0, vectors[1]);
-      out.arr[1] = 1;
+      out._buffer[out._offset] = this.cross2d(p0, vectors[1]);
+      out._buffer[out._offset + 1] = 1;
       return out;
     }
 
@@ -710,9 +723,9 @@ export class HPointAbstract {
       const x = this.cross2d(p0, p1, 1, 2);
       const y = this.cross2d(p0, p1, 2, 0);
       const w = this.cross2d(p0, p1, 0, 1);
-      out.arr[0] = x;
-      out.arr[1] = y;
-      out.arr[2] = w;
+      out._buffer[out._offset] = x;
+      out._buffer[out._offset + 1] = y;
+      out._buffer[out._offset + 2] = w;
       return out;
     }
     return this._cross(vectors, out);
@@ -737,7 +750,10 @@ export class HPointAbstract {
 
     // Create the minor matrix (n-1 rows, n columns)
     using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
-    for ( let i = 0; i < nDims; i += 1 ) mat.setRow(i, points[i].arr);
+    for ( let i = 0; i < nDims; i += 1 ) {
+      const pt = points[i];
+      mat.setRow(i, pt.subarray(pt._offset, pt._offset + pt.DIMS));
+    }
 
     // Use Cramer's rule-style minors.
     using matDet = HGEOM.Matrix.create(nDims, nDims); // E.g., 3x3
@@ -747,7 +763,7 @@ export class HPointAbstract {
       const val = matDet.determinant();
 
       // Apply alternating sign. +,-,+,-. Depending on handedness, this may be reversed.
-      out.arr[colToOmit] = val * sign;
+      out._buffer[out._offset + colToOmit] = val * sign;
       sign *= -1;
     }
     return out; // Dual representation. Cross product of n-1 points in n-space results in hyperplane, not localized coordinate.
@@ -809,6 +825,21 @@ export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBloc
   /** @type {string} */
   static _hgeomLibType = "HPoint";
 
+  static #cachedPool = super.pool;
+
+  static get pool() { return HPoint.#cachedPool; }
+
+  /**
+   * Create a new point that contains the same values as this one.
+   * @param {HPointAbstract} [out]            Object in which to store the cloned values
+   * @returns {HPointAbstract} The out object
+   */
+  clone(out) {
+    // If out is not provided, use the same memory type as this object.
+    out ||= this._isScratch ? this.constructor.createScratch(this.DIMS) : this.constructor.create(this.DIMS);
+    out._buffer.set()
+  }
+
   /**
    * Clone a new point from ephemeral scratch memory.
    * @param {number} nDims
@@ -827,3 +858,46 @@ export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBloc
     return this.clone(this.constructor.create(nDims));
   }
 }
+
+// ----- NOTE: DevTools formatter ----- //
+
+const hPointFormatter = {
+  header(obj) {
+    // Duck-typing check to ensure compatibility with HPointAbstract instances
+    if ( !obj || !(obj instanceof HPointAbstract) ) return null;
+
+    const arr = obj.arr;
+    const className = obj.constructor?.name || obj.constructor._hgeomLibType || "HPointAbstract";
+    const valuesFormatted = Array.from(arr).join(', ');
+
+    return [
+      'span',
+      {},
+      ['span', { style: 'color: #af00db; font-weight: bold;' }, className],
+      ['span', { style: 'color: #666;' }, `(${obj.DIMS}) `],
+      ['span', { style: 'color: #007000;' }, `[${valuesFormatted}]`]
+    ];
+  },
+
+  hasBody(_obj) {
+    return true;
+  },
+
+  body(obj) {
+    const arr = obj.arr;
+    return [
+      'div',
+      { style: 'padding-left: 10px; line-height: 1.5;' },
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float32Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(obj.w)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, '_offset: '], String(obj._offset)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, '_isScratch: '], String(obj._isScratch ?? false)]
+    ];
+  }
+};
+
+// Register the formatter globally
+window.devtoolsFormatters ??= [];
+window.devtoolsFormatters.push(hPointFormatter);

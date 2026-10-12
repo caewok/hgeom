@@ -5,7 +5,7 @@ PIXI,
 "use strict";
 
 import { HPointAbstract } from "../HPointAbstract.js";
-import { PoolableMixin } from "../utils/Pool.js"
+import { PoolableMixin, BufferManager } from "../utils/Pool.js"
 import { mix } from "../utils/mixwith.js";
 
 
@@ -18,6 +18,8 @@ export class HPoint2dAbstract extends HPointAbstract {
 
   constructor() { super(3); }
 
+  // ----- NOTE: Static creation ----- //
+
   static build(x, y, w = 1) { return this.create().set(x, y, w); }
 
   // ----- NOTE: Getters and setters ----- //
@@ -26,22 +28,22 @@ export class HPoint2dAbstract extends HPointAbstract {
   // Vectors return x without any division, to avoid NaN.
 
   /** @type {number} */
-  get x() { return this.arr[0] / (this.w || 1);  }
+  get x() { return this._x / (this._w || 1); }
 
-  get _x() { return this.arr[0]; }
+  get _x() { return this._buffer[this._offset]; }
 
-  set x(value) { this.arr[0] = value * (this.w || 1); }
+  set x(value) { this._x = value * (this.w || 1); }
 
-  set _x(value) { this.arr[0] = value; }
+  set _x(value) { this._buffer[this._offset] = value; }
 
   /** @type {number} */
-  get y() { return this.arr[1] / (this.w || 1); }
+  get y() { return this._y / (this.w || 1); }
 
-  get _y() { return this.arr[1]; }
+  get _y() { return this._buffer[this._offset + 1]; }
 
-  set y(value) { this.arr[1] = value * (this.w || 1); }
+  set y(value) { this._y = value * (this.w || 1); }
 
-  set _y(value) { this.arr[1] = value; }
+  set _y(value) { this._buffer[this._offset + 1] = value; }
 
   // ----- NOTE: Copying ----- //
 
@@ -273,6 +275,18 @@ export class HPoint2dAbstract extends HPointAbstract {
 export class HPoint2d extends mix(HPoint2dAbstract).with(PoolableMixin) {
   /** @type {string} */
   static _hgeomLibType = "HPoint2d";
+
+  /** @type {object} */
+  static BUFFER_OPTS = {
+    maxScratch: 1e05,               /** @type {number} */
+    maxPersistent: 1e04,            /** @type {number} */
+    stride: 3,                      /** @type {number} */
+    bufferClass: BufferManager,     /** @type {class} */
+  };
+
+  static #cachedPool = super.pool;
+
+  static get pool() { return HPoint2d.#cachedPool; }
 }
 
 
@@ -315,40 +329,45 @@ for ( let i = 0; i < COORDS.length; i += 1 ) {
 
 
 
-/*
-if (window.devtoolsFormatters === undefined) {
-  window.devtoolsFormatters = [];
-}
+// ----- NOTE: DevTools formatter ----- //
 
-window.devtoolsFormatters.push({
-  header: function(obj) {
-    if (!(obj instanceof HPoint2d)) return null;
-    if ( !Object.hasOwn(obj, "arr") ) return null; // For incomplete prototypes, like displaying HPoint2d class.
-    return ["div", {},
-      ["span", {style: "color: #881391; font-weight: bold;"}, "HPoint2d "],
-      ["span", {style: "color: #1a1aa6;"}, `x: ${obj.x}`],
-      ["span", {}, ", "],
-      ["span", {style: "color: #1a1aa6;"}, `y: ${obj.y}`],
-      ["span", {}, ", "],
-      ["span", {style: "color: #1a1aa6;"}, `w: ${obj.w}`]
+const hPointFormatter = {
+  header(obj) {
+    // Duck-typing check to ensure compatibility with HPointAbstract instances
+    if ( !obj || !(obj instanceof HPoint2dAbstract) ) return null;
+
+    const arr = obj.arr;
+    const className = obj.constructor?.name || obj.constructor._hgeomLibType || "HPoint2dAbstract";
+    const valuesFormatted = obj._isDormant ? `{ x: NaN, y: NaN }` : `{ x: ${obj.x}, y: ${obj.y} }`;
+    const w = obj._isDormant ? 0 : obj.w;
+
+    return [
+      'span',
+      {},
+      ['span', { style: 'color: #af00db; font-weight: bold;' }, className],
+      ['span', { style: 'color: #007000;' }, `[${valuesFormatted}]`]
     ];
   },
-  hasBody: function() { return true; },
 
-  body: function(obj, cfg = {}) {
-    cfg.level ||= 0;
-    if ( cfg.level > 0 ) return null;
+  hasBody(_obj) {
+    return true;
+  },
 
-    const arrayString = obj.arr ? obj.arr.join(", ") : "null";
-    const pooledStatus = String(obj._isInPool);
-    return ["div", {style: "margin-left: 20px;"},
-      ["div", {}, `x: ${obj.x}, y: ${obj.y}`],
-      ["div", {}, `Raw Array: [${arrayString}]`],
-      ["div", {}, `Pooled: ${pooledStatus}`],
-      ["div", {}, ["object", { "object": obj, "config": { level: cfg.level + 1 } }],
-      ], // The entire object.
-
+  body(obj) {
+    const arr = obj.arr;
+    return [
+      'div',
+      { style: 'padding-left: 10px; line-height: 1.5;' },
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float32Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(w)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, '_offset: '], String(obj._offset)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, '_isScratch: '], String(obj._isScratch ?? false)]
     ];
   }
-});
-*/
+};
+
+// Register the formatter globally
+window.devtoolsFormatters ??= [];
+window.devtoolsFormatters.push(hPointFormatter);

@@ -95,7 +95,7 @@ export class BufferManager {
 export class VariableBlockBufferManager extends BufferManager {
 
   /** @type {Map<number, number} Maps offset --> length in strides */
-  persistentBlockSides = new Map();
+  persistentBlockSizes = new Map();
 
   /** @type {Array<{offset: number, length: number}>} */
   persistentFreeBlocks = [];
@@ -110,7 +110,7 @@ export class VariableBlockBufferManager extends BufferManager {
 
     // Search for a block of sufficient size (first-to-fit).
     const freeIndex = this.persistentFreeBlocks.findIndex(b => b.length >= n);
-    if ( !~freeIndex ) {
+    if ( ~freeIndex ) {
       const block = this.persistentFreeBlocks.splice(freeIndex, 1)[0];
       offset = block.offset;
 
@@ -183,7 +183,7 @@ export class Pool {
   acquireScratch() {
     const shell = this._getShell();
     const offset = this.bufferManager.allocScratch();
-    shell.init(this.bufferManager.scratchSlab, offset, true);
+    shell._init(this.bufferManager.scratchSlab, offset, true);
     return shell;
   }
 
@@ -198,7 +198,7 @@ export class Pool {
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getShell();
-      shell.init(this.bufferManager.scratchSlab, firstOffset + (stride * i), true);
+      shell._init(this.bufferManager.scratchSlab, firstOffset + (stride * i), true);
       shells[i] = shell;
     }
     return shells;
@@ -211,7 +211,7 @@ export class Pool {
   acquirePersistent() {
     const shell = this._getShell();
     const offset = this.bufferManager.allocPersistent();
-    shell.init(this.bufferManager.persistentSlab, offset, false);
+    shell._init(this.bufferManager.persistentSlab, offset, false);
     return shell;
   }
 
@@ -226,7 +226,7 @@ export class Pool {
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getShell();
-      shell.init(this.bufferManager.persistentSlab, firstOffset + (stride * i), false);
+      shell._init(this.bufferManager.persistentSlab, firstOffset + (stride * i), false);
       shells[i] = shell;
     }
     return shells;
@@ -244,7 +244,7 @@ export class Pool {
     for ( let i = 0; i < n; i += 1 ) {
       const offset = i * stride;
       const shell = this._getShell();
-      shell.init(buffer, offset, true); // Treat as scratch so releasing just keeps the shell.
+      shell._init(buffer, offset, true); // Treat as scratch so releasing just keeps the shell.
       out[i] = shell;
     }
     return out;
@@ -263,7 +263,7 @@ export class Pool {
       console.warn(`${shell.constructor.name}|Attempted to release already dormant shell.`);
       return;
     }
-    if ( !shell._isScratch ) this.bufferManager.freePersistent(shell.offset);
+    if ( !shell._isScratch ) this.bufferManager.freePersistent(shell._offset);
     this._addDormantShell(shell);
   }
 
@@ -304,13 +304,13 @@ export class Pool {
    * @param {class} cl
    * @returns {Pool}
    */
-  static getPool(cl, bufferOpts) {
-    if ( !this.#poolRegistry.has(cl) ) {
+  static getPool(cl, bufferOpts = {}) {
+    if ( !Pool.#poolRegistry.has(cl) ) { // Use Pool so children can access.
       const bufferClass = bufferOpts.bufferClass || BufferManager;
       const bufferMgr = new bufferClass(bufferOpts);
-      this.#poolRegistry.set(cl, new this(cl, bufferMgr));
+      Pool.#poolRegistry.set(cl, new this(cl, bufferMgr));
     }
-    return this.#poolRegistry.get(cl);
+    return Pool.#poolRegistry.get(cl);
   }
 }
 
@@ -326,7 +326,7 @@ export class VariableBlockPool extends Pool {
     const n = Math.ceil(nDims / stride); // Need sufficient block size to cover the nDims.
     const shell = this._getShell();
     const offset = this.bufferManager.allocScratch(n);
-    shell.init(this.bufferManager.scratchSlab, offset, true);
+    shell._init(this.bufferManager.scratchSlab, offset, true);
     return shell;
   }
 
@@ -343,7 +343,7 @@ export class VariableBlockPool extends Pool {
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getShell();
-      shell.init(this.bufferManager.scratchSlab, firstOffset + (stride * i), true);
+      shell._init(this.bufferManager.scratchSlab, firstOffset + (stride * i), true);
       shells[i] = shell;
     }
     return shells;
@@ -359,7 +359,7 @@ export class VariableBlockPool extends Pool {
     const n = Math.ceil(nDims / stride); // Need sufficient block size to cover the nDims.
     const shell = this._getShell();
     const offset = this.bufferManager.allocPersistent(n);
-    shell.init(this.bufferManager.persistentSlab, offset, false);
+    shell._init(this.bufferManager.persistentSlab, offset, false);
     return shell;
   }
 
@@ -376,7 +376,7 @@ export class VariableBlockPool extends Pool {
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getShell();
-      shell.init(this.bufferManager.persistentSlab, firstOffset + (stride * i), false);
+      shell._init(this.bufferManager.persistentSlab, firstOffset + (stride * i), false);
       shells[i] = shell;
     }
     return shells;
@@ -394,7 +394,7 @@ export class VariableBlockPool extends Pool {
     for ( let i = 0; i < nObjects; i += 1 ) {
       const offset = i * stride;
       const shell = this._getShell();
-      shell.init(buffer, offset, true); // Treat as scratch so releasing just keeps the shell.
+      shell._init(buffer, offset, true); // Treat as scratch so releasing just keeps the shell.
       out[i] = shell;
     }
     return out;
@@ -410,7 +410,7 @@ export class VariableBlockPool extends Pool {
    */
   static getPool(cl, bufferOpts = {}) {
     bufferOpts.bufferClass ||= VariableBlockBufferManager;
-    super.getPool(cl, bufferOpts);
+    return super.getPool(cl, bufferOpts);
   }
 }
 
@@ -432,16 +432,6 @@ export const PoolableMixin = superclass => class extends superclass {
 
   /** @type {boolean} */
   _isDormant = true; // Track pool state.
-
-  /**
-   * A view of the underlying buffer.
-   * @type {Float32Array[this.constructor.DIMS]}
-   */
-  get arr() {
-    const byteOffset = this._offset * Float32Array.BYTES_PER_ELEMENT;
-    const length = this.constructor.DIMS;
-    return new Float32Array(this._buffer.buffer, byteOffset, length);
-  }
 
   /** Initialize a new object. */
   _init(buffer, offset, isScratch) {
@@ -532,6 +522,8 @@ export const PoolableMixin = superclass => class extends superclass {
   static release(...objs) { objs.forEach(obj => this._release(obj)); }
 
   static onRelease(_obj) { }
+
+  release() { return this.constructor.release(this); }
 
 }
 
