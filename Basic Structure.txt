@@ -1,0 +1,56 @@
+# Basic Structure for HGeom
+
+## Classes
+
+HPointAbstract: Homogenous points of any dimension
+
+HPointAbstract -> HPoint2d: Specific implementation of 2d homogenous points, for performance.
+HPointAbstract -> Hpoint3d: Specific implementation of 3d homogenous points, for performance.
+
+## Point structure
+
+Point has:
+- @prop {ArrayBuffer} _buffer         The Float32 buffer for the point
+- @prop {number} _offset              Where in the buffer the point starts
+- @prop {boolean} _isScratch          Is this point ephemeral?
+
+- @getter {boolean} isVector          Is the w === 0?
+
+
+## Point creation
+- create(): Single persistent object
+- createScratch(): Single temporary object
+- createN(n): Multiple persistent objects
+- createScratchN(): Multiple temporary objects
+- createBlock(): Multiple objects that share a memory block outside the pool
+
+
+## Method chaining
+
+All methods modify in place and return `this`.
+It is assumed that the user will clone points before modifying.
+This permits simple chaining, e.g.:
+tokenPos.clone().add(rayDir).multiplyScalar(2)
+
+## Intersections
+Intersection tests return the t value wherever possible, for speed.
+
+## API
+
+### Instantiated modifiers (mutates `this`, returns `this`)
+- add(other)
+- subtract(other)
+- multiplyScalar(scalar)
+- normalize()
+- transform(matrix)
+
+### Instantiated evaluators (returns primitive/boolean)
+- dot(other)
+- magnitude()
+- equals(other)
+- intersection(other)
+
+### Static generators (returns a new/acquired instance)
+- cross(a, b, [out])
+- vectorTriple(a, b, c, [out])
+

@@ -4,7 +4,7 @@ HGEOM,
 /* eslint no-unused-vars: ["error", { "argsIgnorePattern": "^_" }] */
 "use strict";
 
-import { PoolableMixin, BufferManager } from "./utils/Pool.js";
+import { PoolableMixin, VariableBlockPoolableMixin } from "./utils/Pool.js";
 import { mix } from "./utils/mixwith.js";
 
 /**
@@ -12,19 +12,68 @@ import { mix } from "./utils/mixwith.js";
  * All have a DIMS property that controls the number of axes and offset of w component.
  */
 
-export class PointArray {
-
-  /** @type {number} */
-  get DIMS() { return this.arr.length - 1; }
+export class HPointAbstract {
 
   /** @type {Float32Array} */
-  arr = []; // Could set to null but this provides better compatibility.
+  _buffer = null;
 
-  get isNormalizedEuclidean() {
-    return this.w === 1 || this.w === 0;
+  /** @type {number} */
+  _offset = 0;
+
+  /** @type {number} */
+  DIMS = 4; // Number of dimensions, counting w.
+
+  /**
+   * @param {number} dims       Dimensions, counting w.
+   */
+  constructor(dims = 4) {
+    this.DIMS = dims;
   }
 
-  get isNormalizedSpherical() { return this.magnitudeSquared === 1; }
+  _init() {
+    this._buffer = new Float32Array(this.DIMS);
+  }
+
+  // ----- NOTE: Copying and cloning ----- //
+
+  /**
+   * A view of the underlying buffer.
+   * For consistency with Pooled classes.
+   * @type {Float32Array[this.constructor.DIMS]}
+   */
+  get arr() { return this._buffer; }
+
+  /**
+   * Set all values for this point.
+   * @param {...number}
+   * @returns {this}
+   */
+  set(...args) {
+    this._buffer.set(args, this._offset);
+    return this;
+  }
+
+  /**
+   * Create a new point that contains the same values as this one.
+   * @param {HPointAbstract} [out]            Object in which to store the cloned values
+   * @returns {HPointAbstract} The out object
+   */
+  clone(out) {
+    // If out is not provided, use the same memory type as this object.
+    out ||= this._isScratch ? this.constructor.createScratch(this.DIMS) : this.constructor.create(this.DIMS);
+    out._buffer.set(this.arr, this._offset);
+    return out;
+  }
+
+  /**
+   * Copy values from another point to this one.
+   * @param {HPointAbstract} other
+   * @returns {this}
+   */
+  copyFrom(other) {
+    this._buffer.set(other.arr, this._offset);
+    return this;
+  }
 
   // ----- NOTE: Instance check ----- //
 
@@ -32,631 +81,264 @@ export class PointArray {
    * Make instanceof work across different modules.
    */
   static [Symbol.hasInstance](instance) {
-    return instance && instance.constructor && instance.constructor._hgeomLibType === this._hgeomLibType;
+    if ( !instance || typeof instance !== "object" ) return false;
+
+    // Walk up the inheritance chain..
+    let currentConstructor = instance.constructor;
+    while ( currentConstructor ) {
+      if ( currentConstructor._hgeomLibType === this._hgeomLibType ) return true;
+
+      // Move to the parent class.
+      currentConstructor = Object.getPrototypeOf(currentConstructor);
+    }
+    return false;
   }
 
   /** @type {string} */
-  static get _hgeomLibType() { return this.name; }
+  static _hgeomLibType = "HPointAbstract";
 
-
-  // ----- NOTE: Set, clone ----- //
+  // ----- NOTE: Static creation ----- //
 
   /**
    * Create a new point. Meant to be overridden using pooling, but kept here for testing.
    * @param {number} nDims            Number of dimensions
-   * @returns {PointArrayAbstract}
+   * @returns {HPointAbstract}
    */
-  static create(nDims = 2) {
-    const out = new this();
-    out.arr.length = nDims + 1;
-    out.arr.fill(0);
-    out.w = 1;
+  static create(nDims = 4) { return new this(nDims); }
+
+  /**
+   * Create a new point with zero values but for the 1 at the end.
+   * @param {number} nDims            Number of dimensions
+   * @param {HPointAbstract} [out]        Where to store the result
+   * @returns {HPointAbstract}
+   */
+  static zeroPoint(nDims = 4, out) {
+    out ||= this.create(nDims);
+    out._buffer.fill(0, out._offset, out.DIMS);
+    out._buffer[out._offset + out.DIMS - 1] = 1;
     return out;
   }
 
   /**
-   * Create an array of points.
-   * Only a placeholder; used by child classes to create points that share an array buffer.
-   * @param {number} n          Number of objects to creaete
-   * @param {number} [nDims=2]  How many dimensions
-   * @returns {PointArray[n]}
+   * Create a new point with zero values.
+   * @param {number} nDims            Number of dimensions
+   * @param {HPointAbstract} [out]        Where to store the result
+   * @returns {HPointAbstract}
    */
-  static allocateNObjects(n, nDims = 2) {
-    const out = Array(n);
-    for ( let i = 0; i < n; i += 1 ) out[i] = this.create(nDims);
+  static zeroVector(nDims = 4, out) {
+    out ||= this.create(nDims);
+    out._buffer.fill(0, out._offset, out.DIMS);
     return out;
   }
 
-  /**
-   * Create a new point and copy data to the array.
-   * Shortcut for create plus set.
-   * @param {...number} args
-   * @returns {HPointArray}
-   */
-  static build(...args) { return this.create(args.length - 1).set(...args); }
+  // ----- NOTE: W property ----- //
 
-  /**
-   * Create a new point that contains the same values as this one.
-   * @param {HPointArray} [out]            Object in which to store the cloned values
-   * @returns {HPointArray} The out object
-   */
-  clone(out) {
-    out ||= this.constructor.create(this.NDIMS);
-    out.arr.set(this.arr);
-    return out;
+  // Child classes may defined additional property getters, like x, y, z.
+  // Convention places w at the last value.
+  // Convention is for get x to return arr[0]/w. While get _x will return arr[0].
+
+  get w() { return this._buffer[this._offset + this.DIMS - 1]; }
+
+  set w(value) { this._buffer[this._offset + this.DIMS - 1] = value; }
+
+  // For parallel with _x, _y, ...
+  get _w() { return this._buffer[this._offset + this.DIMS - 1]; }
+
+  set _w(value) { this._buffer[this._offset + this.DIMS - 1] = value; }
+
+  get isVector() { return this.w === 0; }
+
+  get isNormalizedEuclidean() {
+    return this.w === 1 || this.w === 0;
   }
 
+  get isNormalizedSpherical() { return this.magnitudeSquared === 1; }
+
+
+  // ----- NOTE: Element-wise math ----- //
+
   /**
-   * Set the values in the array.
-   * @param {...number} args        Values to set
+   * Apply a function element-wise to each coordinate, including w.
+   * @param {function} callback
+   * - @param {number} value
+   * - @param {number} index
+   * - @param {number} w value
    * @returns {this}
    */
-  set(...args) {
-    this.arr.set(args);
+  applyElementWise(callback) {
+    const a = this._buffer;
+    const w = this.w;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = callback(a[this._offset + i], i, w);
+    }
     return this;
   }
 
   /**
-   * Copy points from a given object.
-   * If the object contains w, will copy directly.
-   * Otherwise will set x and y, setting w to 1.
-   * @param {object} obj
-   * @param {PointArray} out
-   * @returns {PointArray}
+   * Apply a function element-wise to each coordinate, except w.
+   * @param {function} callback
+   * - @param {number} value
+   * - @param {number} index
+   * - @param {number} w value
+   * @returns {this}
    */
-  copyFrom(obj, out) {
-    if ( obj instanceof HGEOM.Matrix ) obj = obj.arr;
-
-    // Arrays, TypedArrays, Matrix.
-    if ( Array.isArray(obj) || ArrayBuffer.isView(obj) ) {
-      out ||= this.constructor.create(obj.length - 1); // Need the DIMS, which is assumed to not include w.
-      for ( let i = 0, n = Math.min(out.DIMS + 1, obj.length); i < n; i += 1 ) out.arr[i] = obj[i];
+  applyCoordinateWise(callback) {
+    const a = this._buffer;
+    const w = this.w;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      a[this._offset + i] = callback(a[this._offset + i], i, w);
     }
-
-    // PointArray.
-    else if ( obj instanceof HGEOM.PointArray ) {
-      out ||= this.constructor.create(obj.DIMS)
-      // Allow copying of objects with different dimensions.
-      for ( let i = 0, n = Math.min(out.DIMS, obj.DIMS); i < n; i += 1 ) out.arr[i] = obj.arr[i];
-      out.w = obj.w;
-    }
-
-    // Otherwise don't copy.
-    return out;
-  }
-
-  // ----- NOTE: Property getters ----- //
-
-  // Child classes may defined additional property getters, like x, y, z.
-  // Convention is for, e.g., get x to return arr[0]/w. While get _x will return arr[0].
-
-  get w() { return this.arr[this.DIMS]; }
-
-  set w(value) { this.arr[this.DIMS] = value; }
-
-  // For parallel with _x, _y, ...
-  get _w() { return this.arr[this.DIMS]; }
-
-  set _w(value) { this.arr[this.DIMS] = value; }
-
-  get isVector() { return this.w === 0; }
-
-  // ----- NOTE: Static Element-wise Addition, subtraction, multiplication ----- //
-
-  /**
-   * Add a vector to this one, elementwise.
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @param {PointArrayAbstract} p1      The vector to add
-   * @param {PointArrayAbstract} ...      The other vectors to add
-   * @returns {PointArrayAbstract}
-   */
-  static add(out, p1, ...pts) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i];
-      for ( const pt of pts ) out.arr[i] += pt.arr[i];
-    }
-    return out;
+    return this;
   }
 
   /**
-   * Subtract a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @param {PointArrayAbstract} p1      The vector to subtract from
-   * @param {PointArrayAbstract} ...      The other vectors to subtract
-   * @returns {PointArrayAbstract}
+   * Add another point to this one.
+   * @param {HPointAbstract} other
+   * @returns {this}
    */
-  static subtract(out, p1, ...pts) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i];
-      for ( const pt of pts ) out.arr[i] -= pt;
+  add(other) {
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] += b[other._offset + i];
+    return this;
+  }
+
+  /**
+   * Subtract another point from this one.
+   * @param {HPointAbstract} other
+   * @returns {this}
+   */
+  subtract(other) {
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] -= b[other._offset + i];
+    return this;
+  }
+
+  /**
+   * Multiply this point by another.
+   * @param {HPointAbstract} other
+   * @returns {this}
+   */
+  multiply(other) {
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] *= b[other._offset + i];
+    return this;
+  }
+
+  /**
+   * Divide this point by another.
+   * @param {HPointAbstract} other
+   * @returns {this}
+   */
+  divide(other) {
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] /= b[other._offset + i];
+    return this;
+  }
+
+  /**
+   * Multiply this point by a constant.
+   * @param {number} c
+   * @returns {this}
+   */
+  multiplyScalar(c) {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] *= c;
+    return this;
+  }
+
+  /**
+   * Divide this point by a constant.
+   * @param {number} c
+   * @returns {this}
+   */
+  divideScalar(c) { return this.multiplyScalar(1/c); }
+
+  /**
+   * Invert this point: 1 / pt.
+   * @returns {this}
+   */
+  invert() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = 1 / a[this._offset + i];
     }
-    return out;
+    return this;
   }
 
   /**
-   * Multiply a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @param {PointArrayAbstract} p1      The vector to multiply
-   * @param {PointArrayAbstract} ...      The other vectors to multiply with
-   * @returns {PointArrayAbstract}
+   * Take the square root of this point or vector. Will create NaN values if the coordinate is negative.
+   * @returns {this}
    */
-  static multiply(out, p1, ...pts) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i] * pts[i];
-      for ( const pt of pts ) out.arr[i] *= pt;
+  squareRoot() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Math.sqrt(a[this._offset + i]);
     }
-    return out;
-  }
-
-  /**
-   * Divide a point vector to this one, elementwise.
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @param {PointArrayAbstract} p1      The vector to divide
-   * @param {PointArrayAbstract} ...      The other vectors to divide with
-   * @returns {PointArrayAbstract}
-   */
-  static divide(out, p1, ...pts) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) {
-      out.arr[i] = a[i] * pts[i];
-      for ( const pt of pts ) out.arr[i] /= pt;
-    }
-    return out;
-  }
-
-  /**
-   * Multiply this point by a scalar, elementwise.
-   * Note that has no real effect on points because dividing by w cancels it out.
-   * It does scale vectors.
-   * @param {PointArrayAbstract} p          The point to scale
-   * @param {PointArrayAbstract} c          The scalar to multiply
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static multiplyScalar(p, c, out) {
-    const nDims = p.DIMS;
-    out ||= this.create(nDims);
-    const a = p.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = a[i] * c;
-    return out;
-  }
-
-  /**
-   * Divide this point by a scalar, elementwise.
-   * @param {PointArrayAbstract} p          The point to scale
-   * @param {PointArrayAbstract} c          The scalar to multiply
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static divideScalar(p, c, out) { return this.multiplyScalar(p, 1/c, out); }
-
-  /**
-   * Invert a pt: 1/pt.
-   * @param {PointArrayAbstract} p      The point to invert
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static invert(p, out) {
-    // 1/[x, y,w] = [1/(x/w), 1/(y/w), 1] = [w/x, w/y, 1] = [w, w, x*y]
-    // Or:
-    // 1/[x,y,w] = [1/x, 1/y, 1/w] = [1/x / 1/w, 1/y / 1/w, 1]
-    //   = [w/x, w/y,1] = [w, w, x*y]
-    const nDims = p.DIMS;
-    out ||= this.create(nDims);
-    const a = p.arr;
-    const w = a[nDims];
-    let denom = 1;
-    for ( let i = 0; i < nDims; i += 1 ) {
-      out.arr[i] = w;
-      denom *= a[i];
-    }
-    out.w = denom;
-    return out;
-  }
-
-  /**
-   * Take the square root of this point or vector. Will create NaN values if the coordinate (or w) is negative.
-   * @param {PointArrayAbstract} [out]
-   * @returns {PointArrayAbstract}
-   */
-  static squareRoot(p1, out) {
-    // [x, y, w]: [Math.sqrt(x/w), Math.sqrt(y/w), 1] = [Math.sqrt(x)/Math.sqrt(w), Math.sqrt(y)/Math.sqrt(w), 1]
-    //  = [Math.sqrt(x), Math.sqrt(y), Math.sqrt(w)]
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.sqrt(a[i]);
-    return out;
+    return this;
   }
 
   /**
    * Raise this point to a power.
-   * For points, will first get the GCD.
-   * @param {PointArrayAbstract} p1
-   * @param {number} exp            The exponent to use
-   * @param {PointArrayAbstract} [out]
-   * @returns {PointArrayAbstract}
+   * @param {number} [exp=2]            The exponent to use
+   * @returns {this}
    */
-  static raiseToPower(p1, exp = 2, out) {
-    // [x, y, w] = [(x/w) ** 2, (y/w) ** 2, 1|0] = [x**2, y**2, w**2]
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.pow(a[i], exp);
-    return out;
-  }
-
-  /**
-   * Set each coordinate, including w, to the absolute value of the coordinate.
-   * @param {PointArrayAbstract} p1
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static abs(p1, out) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.abs(a[i]);
-    return out;
-  }
-
-  /**
-   * Floor each coordinate, including w.
-   * @param {PointArrayAbstract} p1
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static floor(p1, out) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.floor(a[i]);
-    return out;
-  }
-
-  /**
-   * Ceil each coordinate, including w.
-   * @param {PointArrayAbstract} p1
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static ceil(p1, out) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = Math.ceil(a[i]);
-    return out;
-  }
-
-
-
-  // ---- NOTE: Static "Cartesian" non-homogenous math: Addition, subtraction, multiplication, division ----- //
-
-  /**
-   * "Cartesian" math treats vectors (w = 0) as w = 1 and
-   * otherwise is equivalent to non-homogenous math for a point.
-   * The "w" value is only used to carry over division.
-
-  /**
-   * "Cartesian" add.
-   * Add two homogenous points or vectors but treat as a normal point/vector.
-   * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {PointArrayAbstract} p1      The vector to add
-   * @param {PointArrayAbstract} p2      The other vector to add
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static cAdd(p1, p2, out) {
-    /*
-    w, w' > 0: [x, y, w] + [x', y', w'] = [x/w + x'/w', y/w + y'/w', 1]
-      = [((x * w') + (x' * w)) / (w * w'), ((y * w') + (y' * w)) / (w * w'), 1]
-      = [(x * w') + (x' * w), (y * w') + (y' * w), w * w']
-    */
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    const b = p2.arr;
-
-    /* If the ws are equal, no need to get GCD
-    w === w', w > 0: [x, y, w] + [x', y', w] = [x/w + x'/w, y/w + y'/w, 1] = [x + x', y + y', w]
-    */
-    if ( p1.w === p2.w ) {
-      for ( let i = 0; i < nDims; i += 1 ) out.arr[i] = a[i] + b[i];
-      out.w = p1.w || 1;
-      return out;
+  raiseToPower(exp = 2) {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Math.pow(a[this._offset + i], exp);
     }
-
-    // GCD
-    const m1 = p1.w || 1;
-    const m2 = p2.w || 1;
-    for ( let i = 0; i < nDims; i += 1 ) out.arr[i] = (a[i] * m2) + (b[i] * m1);
-    out.w = m1 * m2;
-    return out;
-  }
-
-  /**
-   * "Cartesian" subtract.
-   * If w > 1, this will adjust the points to greatest common denominator.
-   * Unlike homogenous subtraction, the resulting point will have w = 1 if the ws are equal.
-   * @param {PointArrayAbstract} p1      The vector to subtract from
-   * @param {PointArrayAbstract} p2      The other vector to subtract
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static cSubtract(p1, p2, out) {
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    const b = p2.arr;
-
-    if ( p1.w === p2.w ) {
-      for ( let i = 0; i < nDims; i += 1 ) out.arr[i] = a[i] - b[i];
-      out.w = 1;
-      return out;
-    }
-
-    // GCD
-    const m1 = p1.w || 1;
-    const m2 = p2.w || 1;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
-    out.w = m1 * m2;
-    return out;
-  }
-
-  /**
-   * "Cartesian" multiply as if non-homogenous points.
-   * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {PointArrayAbstract} p1      The vector to multiply
-   * @param {PointArrayAbstract} p2      The other vector to multiply with
-   * @param {PointArrayAbstract} [out]   The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static cMultiply(p1, p2, out) {
-    // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
-    // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
-    // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
-    const nDims = p1.DIMS;
-    out ||= this.create(nDims);
-    const a = p1.arr;
-    const b = p2.arr;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = a[i] * b[i];
-    out.w = (p1.w || 1) * (p2.w || 1);
-    return out;
-  }
-
-  /**
-   * "Cartesian" invert. 1 / pt.
-   * Treats vectors (w === 0) as point (w === 1).
-   * @param {PointArrayAbstract} p      The point to invert
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static cInvert(p, out) {
-    // 1/[x,y,w] = [1/(x/w), 1/(y/w), 1] = [w/x, w/y, 1] = [w, w, x*y]
-    const nDims = p.DIMS;
-    out ||= this.create(nDims);
-    const a = p.arr;
-    const w = p.w || 1;
-    let denom = 1;
-    for ( let i = 0; i < nDims; i += 1 ) {
-      out.arr[i] = w;
-      denom *= a[i];
-    }
-    out.w = denom;
-    return out;
-  }
-
-
-  /**
-   * "Cartesian" divide as if non-homogenous points.
-   * If w > 1, this will adjust the points to greatest common denominator.
-   * @param {HPointArray} other      The other vector to multiply
-   * @param {HPointArray} [out]      The object in which to store the result.
-   * @returns {HPointArray}
-   */
-  static cDivide(p1, p2, out) {
-    // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
-    // w === w', w > 0: [x, y, w] / [x', y', w] = [x/w / x'/w, y/w / y'/w, 1] = [x/x', y/y', 1]
-    //  = [(x*y')/(x'*y'), (y*x')/(x'*y'), 1] = [x*y', y*x', x' * y']
-    // w, w' > 0: [x, y, w] / [x', y', w'] = [x/w / x'/w', y/w / y'/w', 1]
-    //  = [(x*w')/(w*x'), (y*w')/(w*y'), 1] = [(x*w')*(w*y')/(w*x')*(w*y'), (y*w')*(w*x')/(w*y')*(w*x'), 1]
-    //  = [x*w' * w*y', y*w' * w*x', w*y' * w*x']
-
-    // [x,y,z,w] / [x',y',z',w] = [x/w / x'/w, y/w / y'/w, z/w / z'/w, 1] = [x/x', y/y', z/z', 1]
-    //   = [(x*y'*z')/(x'*y'*z'), (y*x'*z')/(x'*y'*z'), (z*x'*y')/(x'*y'*z')]
-    //   = [x*y'*z', y*x'*z', z*x'*y', x'*y'*z']
-
-    // [x,y,z,w] / [x',y',z',w'] = [x/w / x'/w', y/w / y'/w', z/w / z'/w', 1]
-    //   = [(x*w')/(w*x'), (y*w')/(w*y'), (z*w')/(w*z'), 1]
-    //   = [(x*w')*(w*y')*(w*z')/(w*x')*(w*y')*(w*z'), (y*w')*(w*x')*(w*z')/(w*y')*(w*x')*(w*z'), (z*w')*(w*x')*(w*y')/(w*y')*(w*x')*(w*z'), 1]
-    //   = [(x*w')*(w*y')*(w*z'), (y*w')*(w*x')*(w*z'), (z*w')*(w*x')*(w*y'), (w*x')*(w*y')*(w*z')]
-
-    // Instead, calculate [x,y,w] * (1/[x',y',w'])
-    this.cInvert(p2, out);
-    return this.cMultiply(p1, out, out);
-  }
-
-  /**
-   * "Cartesian" multiply by a scalar.
-   * Treats vectors (w === 0) as point (w === 1).
-   * @param {PointArrayAbstract} p          The point to scale
-   * @param {PointArrayAbstract} c          The scalar to multiply
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static cMultiplyScalar(p, c, out) {
-    // [3,6,3] * 5 = [1, 2, 1] * 5 = [5, 10, 1]
-    // Same as [15, 30, 15] -> [15, 30, 3] = [5, 10, 1]
-    // w > 0: [x, y, w] * c = [x/w * c, y/w * c, 1] = [x*c, y*c, w]
-
-    // x/w * 5 = 5x / w. The w is not multiplied.
-    // y/w * 5 = 5y / w.
-    const nDims = p.DIMS;
-    out ||= this.create(nDims);
-    const a = p.arr;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = a[i] * c;
-    out.w = p.w || 1;
-    return out;
-  }
-
-  /**
-   * "Cartesian" divide the scalar as if non-homogenous points.
-   * @param {PointArrayAbstract} p          The point to scale
-   * @param {PointArrayAbstract} c          The scalar to multiply
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
-   */
-  static cDivideScalar(p, c, out) {
-    // x/w / 5 = x/w * 1/5 = x / 5w.
-    // y/w / 5 = y/w * 1/5 = y / 5w.
-    const nDims = p.DIMS;
-    out ||= this.create(nDims);
-    p.clone(out);
-    out.w ||= 1;
-    out.w *= c;
-    return out;
-  }
-
-  // ----- NOTE: Static dot ----- //
-
-  /**
-   * Dot product of two vectors: a.x * b.x + a.y * b.y + ...
-   * Only well-defined for vectors.
-   * @param {PointArrayAbstract} p1    A point
-   * @param {PointArrayAbstract} p2    Another point
-   * @returns {number}
-   */
-  static dot(p1, p2) {
-    const a = p1.arr;
-    const b = p2.arr;
-    let out = 0;
-    for ( let i = 0, n = p1.DIMS + 1; i < n; i += 1 ) out += (a[i] * b[i]);
-    return out;
-  }
-
-  /**
-   * "Cartesian" dot product.
-   * @param {PointArrayAbstract} p1    A point
-   * @param {PointArrayAbstract} p2    Another point
-   * @returns {number}
-   */
-  static cDot(p1, p2) {
-    // (w value ignored for dot)
-    // w === w', w === 0: [x,y,0] • [x',y',0] = x * x' + y * y'
-    // w or w' === 0: [x,y,0] • [x',y',w] = x * x'/w' + y * y'/w' = (x*x' + y*y')/w'
-    // w === w', w > 0: [x,y,w] • [x',y',w] = x/w * x'/w + y/w * y'/w = (x*x' + y*y') / w
-    // w, w' > 0: [x,y,w] • [x',y',w] = x/w * x'/w' + y/w * y'/w'
-    //   = (x*x')/(w*w') + (y*y')/(w*w') = (x*x' + y*y') / (w * w')
-    const a = p1.arr;
-    const b = p2.arr;
-    let out = 0;
-    for ( let i = 0, nDims = p1.DIMS; i < nDims; i += 1 ) out += (a[i] * b[i]);
-    out /= ((p1.w || 1) * (p2.w ||  1));
-    return out;
-  }
-
-  // ----- NOTE: Instance methods for basic math ----- //
-
-  /**
-   * Add a point/vector to another point/vector.
-   * Point + Point = Point (average between them)
-   * Point + Vector = Point
-   * Vector + Vector = Vector
-   * Vector + Point = Point
-   * @param {PointArrayAbstract} other  Point to add to this one
-   * @param {PointArrayAbstract} ...    Additional points to add to this one
-   * @returns {PointArrayAbstract}
-   */
-  add(other, ...pts) { return this.constructor.add(this, this, other, ...pts); }
-
-  /**
-   * Subtract a point/vector from another point/vector.
-   * For points, will get GCD.
-   * Point - Point = Vector
-   * Point - Vector = Point
-   * Vector - Vector = Vector
-   * Vector - Point = Point (-w in most cases)
-   * @param {PointArrayAbstract} other  Point to subtract from this one
-   * @param {PointArrayAbstract} ... Additional points to subtract from this one
-   * @returns {PointArrayAbstract}
-   */
-  subtract(other, ...pts) {
-    if ( this.isVector || other.isVector ) return this.constructor.subtract(this, this, other, ...pts);
-
-    // GCD
-    // Like cSubtract, but skipping a few steps.
-    if ( pts.length ) {
-      [other, ...pts].forEach(pt => this.subtract(pt));
-      return this;
-    }
-    const nDims = this.DIMS;
-    const a = this.arr;
-    const b = other.arr;
-    const m1 = this.w;
-    const m2 = other.w;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) this.arr[i] = (a[i] * m2) - (b[i] * m1);
-    this.w = 0;
     return this;
   }
 
   /**
-   * Multiply this point by a scalar, elementwise.
-   * Note that has no real effect on points because dividing by w cancels it out.
-   * It does scale vectors.
-   * @param {PointArrayAbstract} c          The scalar to multiply
-   * @returns {PointArrayAbstract}
+   * Set each coordinate, including w, to the absolute value of the coordinate.
+   * @returns {this}
    */
-  scale(c) { return this.constructor.multiplyScalar(this, c, this); }
-
-  /**
-   * Apply a function elementwise to each coordinate, including w.
-   * @param {function}
-   * - @param {number} value
-   * - @param {number} index
-   * - @param {number} w value
-   * @returns {PointArrayAbstract}
-   */
-  static applyElementWise(pt, callback, out) {
-    const nDims = pt.DIMS;
-    out ||= pt.constructor.create(nDims);
-    const a = pt.arr;
-    const w = pt.w;
-    for ( let i = 0, n = nDims + 1; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
-    return out;
+  abs() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Math.abs(a[this._offset + i]);
+    }
+    return this;
   }
 
-  applyElementWise(callback) { return this.constructor.applyElementWise(this, callback, this); }
-
   /**
-   * Apply a function elementwise to each coordinate, except w.
-   * @param {function}
-   * - @param {number} value
-   * - @param {number} index
-   * - @param {number} w value
-   * @param {PointArrayAbstract} [out]      The object in which to store the result.
-   * @returns {PointArrayAbstract}
+   * Set each coordinate, including w, to the nearest lower integer.
+   * @returns {this}
    */
-  static applyCoordinateWise(pt, callback, out) {
-    const nDims = pt.DIMS;
-    out ||= pt.constructor.create(nDims);
-    const a = pt.arr;
-    const w = pt.w;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = callback(a[i], i, w);
-    return out;
+  floor() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Math.floor(a[this._offset + i]);
+    }
+    return this;
   }
 
-  applyCoordinateWise(callback) { return this.constructor.applyCoordinateWise(this, callback, this); }
+  /**
+   * Set each coordinate, including w, to the nearest higher integer.
+   * @returns {this}
+   */
+  ceil() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Math.ceil(a[this._offset + i]);
+    }
+    return this;
+  }
+
+  /**
+   * Normalize by dividing this vector by the magnitude.
+   * Only well-defined for vectors.
+   * @returns {this}
+   */
+  normalize() {
+    this.divideScalar(this.magnitude());
+    return this;
+  }
 
   // ----- NOTE: Equality ----- //
 
@@ -664,16 +346,15 @@ export class PointArray {
    * Is this point exactly equal to another?
    * Points with different w values are different even if they could be the same.
    * Use perspectiveDivide to ensure equality for differing w values.
-   * @param {PointArray} other
+   * @param {HPointAbstract} other
    * @returns {boolean}
    */
   equals(other) {
-    const a = this.arr;
-    const b = other.arr;
-    if ( a.length !== b.length ) return false;
-
-    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) {
-      if ( a[i] !== b[i] ) return false;
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      if ( a[this._offset + i] !== b[this._offset + i] ) return false;
     }
     return true;
   }
@@ -682,129 +363,21 @@ export class PointArray {
    * Is this point almost equal to another?
    * Points with different w values are different even if they could be the same.
    * Use perspectiveDivide to ensure equality for differing w values.
-   * @param {PointArray} other
+   * @param {HPointAbstract} other
    * @param {number} [epsilon]
    * @returns {boolean}
    */
   almostEquals(other, epsilon) {
-    const a = this.arr;
-    const b = other.arr;
-     if ( a.length !== b.length ) return false;
-
-    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) {
-      if ( !a[i].almostEqual(b[i], epsilon) ) return false;
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      if ( !a[this._offset + i].almostEquals(b[this._offset + i], epsilon) ) return false;
     }
     return true;
   }
 
-  // ----- NOTE: Matrix transform ----- //
-
-  /**
-   * Multiply this point by a matrix.
-   * @param {PointArray} pt
-   * @param {Matrix} M
-   * @param {PointArray} [out]
-   * @returns {PointArray}
-   */
-  static transform(pt, M, out) {
-    out ||= this.constructor.create(this.DIMS);
-    using mPoint = M.constructor.fromHPoint(this);
-    using mOut = M.constructor.fromHPoint(out); // Will share the array.
-    mPoint.multiply(M, mOut);
-    return out;
-  }
-
-  transform(M) { return this.constructor.transform(this, M, this); }
-
-  // ----- NOTE: Vectorize ----- //
-
-  /**
-   * Get the vector between two points, by subtracting the second from the first.
-   * Alias for a.subtract(b, out).
-   */
-  static vectorBetween(a, b, out) { return a.subtract(b, out); }
-
-  /**
-   * Get the vector between two points, by subtracting the second from the first.
-   * This vector will be normalized.
-   * This is faster than a.subtract(b).normalize().
-   * For point - vector, this will return the vector scaled by the point's w.
-   * For vector - point, this will return the vector scaled by the point's -w.
-   * For vector - vector, this will fail.
-   * The points should have the same w sign.
-   * @param {PointArrayAbstract} a       First point
-   * @param {PointArrayAbstract} b       Second point, subtracted from the first
-   * @param {PointArrayAbstract} out
-   * @returns {PointArrayAbstract} A vector
-   */
-  static unitVectorBetween(a, b, out) {
-    if ( a.isVector && b.isVector ) throw Error(`${this.name}|unitVectorBetween requires points.`);
-    // See https://web.engr.oregonstate.edu/~mjb/cs557/Handouts/homogcoords.1pp.pdf
-    // GCD
-    const nDims = a.DIMS;
-    out ||= this.create(nDims);
-    const m1 = a.w || 1;
-    const m2 = b.w || 1;
-    for ( let i = 0, n = nDims; i < n; i += 1 ) out.arr[i] = (a[i] * m2) - (b[i] * m1);
-
-    // Ignore the denominator.
-    out.w = 0;
-    return out.normalize(out);
-  }
-
-
-  // ----- NOTE: Dot, magnitude, and normalize ----- //
-
-  /**
-   * Perspective divide this point to convert it to standard 3D Cartesian point p.
-   * @param {HPointAbstrat} out
-   * @returns {HPointArray} out  This point with w set to 1.
-   */
-  perspectiveDivide() {
-    if ( this.isVector ) throw Error(`${this.constructor.name}|Perspective divide is not defined for vectors.`);
-    this.multiplyScalar(1/this.w);
-    return this;
-  }
-
-	/**
-	 * Euclidean normalization. Point w set to 1.
-	 * Perspective divides the point in place.
-	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
-	 * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
-	 * @returns {HPointArray} out
-	 */
-	euclideanNormalization() {
-	  if ( !(this.isVector || this.isNormalizedEuclidean) ) this.perspectiveDivide(this);
-	  return this;
-	}
-
-	/**
-	 * Spherical normalization. Point or vector normalized to 1.
-	 * Done in place.
-	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
-	 * Resulting vectors lie on a sphere.
-	 * Points xs and -xs represent the same 2d point. Can be used in oriented projective geometry
-	 * to distinguish between lines with different orientation.
-	 * @returns {HPointArray} out
-	 */
-	sphericalNormalization() {
-	  if ( !this.isNormalizedSpherical ) this.normalize(this);
-	  return this;
-	}
-
-  /**
-   * Dot product of this point with another.
-   * @param {HPointArray} other
-   * @returns {number}
-   */
-  dot(other) { return this.constructor.dot(this, other); }
-
-  /**
-   * Dot product of this point with itself.
-   * Faster than pt.dot(pt).
-   * @returns {number}
-   */
-  dotSelf() { return this.magnitudeSquared(); }
+  // ----- NOTE: Basic evaluators ----- //
 
   /**
    * Magnitude (length, or sometimes distance) of this vector.
@@ -814,11 +387,272 @@ export class PointArray {
    */
   magnitude() { return Math.sqrt(this.magnitudeSquared()); }
 
+  /**
+   * Magnitude squared (length, or sometimes distance) of this vector.
+   * Defined as the dot product of this vector with itself.
+   * Only well-defined for vectors.
+   * @returns {number}
+   */
   magnitudeSquared() {
-    // For speed, don't just call dot.
-    const a = this.arr;
     let out = 0;
-    for ( let i = 0, n = this.DIMS + 1; i < n; i += 1 ) out += (a[i] ** 2);
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      const c = a[this._offset + i]
+      out += c * c;
+    }
+    return out;
+  }
+
+  /**
+   * Dot product of this point with another.
+   * @param {HHPointAbstract} other
+   * @returns {number}
+   */
+  dot(other) {
+    let out = 0;
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      out += (a[this._offset + i] * b[other._offset + i]);
+    }
+    return out;
+  }
+
+  /**
+   * Dot product of this point with itself.
+   * @returns {number}
+   */
+  dotSelf() { return this.magnitudeSquared(); }
+
+  // ----- NOTE: Matrix transform ----- //
+
+  /**
+   * Multiply this point by a matrix.
+   * @param {Matrix} M
+   * @returns {this}
+   */
+  transform(M) {
+    // TODO: Fix so it modifies this point.
+    using mPoint = M.constructor.fromHPoint(this);
+    return mPoint.multiply(M);
+  }
+
+  /**
+   * Interpolate between this geometry and another by a parameter t.
+   * @param {HPointAbstract} other      The other point along the line
+   * @param {number} t                  Value, typically between 0 and 1
+   * @returns {this}
+   */
+  lerpProject(other, t) {
+    const w1 = this.w;
+    const w2 = other.w;
+    const invT = 1 - t;
+
+    // Linearly interpolate the weights.
+    const wT = (w1 * invT) + (w2 * t);
+
+    // Rational interpolation for the coordinates.
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = ((a[this._offset + i] * w1 * invT) + (b[other._offset + i] * w2 * t)) / wT;
+    }
+    this.w = 1; // The result is normalized.
+    return this;
+  }
+
+  // ----- NOTE: Projective math ----- //
+
+  // Cross-multiplies the w, effectively delaying division.
+  // Use perspectiveDivide to set w back to 1.
+  // Caution: Can result in buffer overrun for Float32Array values if w gets too high.
+
+  /**
+   * Perspective divide this point to convert it to standard 3D Cartesian point p.
+   * @returns {this} This point with w set to 1.
+   */
+  perspectiveDivide() {
+    if ( this.isNormalizedEuclidean ) return this;
+    this.multiplyScalar(1/this.w);
+    return this;
+  }
+
+  /**
+	 * Euclidean normalization. Point w set to 1.
+	 * Perspective divides the point in place.
+	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+	 * Once normalized, the euclidean part (e.g., x, y) contains the euclidean coordinates.
+	 * @returns {this}
+	 */
+	get euclideanNormalization() { return this.perspectiveDivide; }
+
+	/**
+	 * Spherical normalization. Point or vector normalized to 1.
+	 * Done in place.
+	 * See Photogrammetric Computer Vision section 5.1.2.2, page 199.
+	 * Resulting vectors lie on a sphere.
+	 * Points xs and -xs represent the same 2d point. Can be used in oriented projective geometry
+	 * to distinguish between lines with different orientation.
+	 * @returns {this}
+	 */
+	sphericalNormalization() {
+	  if ( !this.isNormalizedSpherical ) this.normalize(this);
+	  return this;
+	}
+
+  /**
+   * "Cartesian" or projective addition.
+   * Add other point but treat as a normal point/vector.
+   * If w > 1, this will adjust the points to greatest common denominator.
+   * @param {HPointAbstractAbstract} other      The vector to add
+   * @returns {this}
+   */
+  cAdd(other) {
+    /*
+    w, w' > 0: [x, y, w] + [x', y', w'] = [x/w + x'/w', y/w + y'/w', 1]
+      = [((x * w') + (x' * w)) / (w * w'), ((y * w') + (y' * w)) / (w * w'), 1]
+      = [(x * w') + (x' * w), (y * w') + (y' * w), w * w']
+    */
+
+    const w1 = this.w;  // TODO: Should either w be forced to 1 if 0?
+    const w2 = other.w;
+    if ( w1 === w2 ) {
+      /* If the ws are equal, no need to get GCD
+      w === w', w > 0: [x, y, w] + [x', y', w] = [x/w + x'/w, y/w + y'/w, 1] = [x + x', y + y', w]
+      */
+      this.add(other);
+      this.w = w1;
+      return this;
+    }
+
+    // GCD
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      a[this._offset + i] = (a[this._offset + i] * w2) + (b[other._offset + i] * w1);
+    }
+    this.w = w1 * w2;
+    return this;
+  }
+
+  /**
+   * "Cartesian" or projective subtraction.
+   * Unlike homogenous subtraction, the resulting point will have w = 1 if the ws are equal.
+   * If w > 1, this will adjust the points to greatest common denominator.
+   * @param {HPointAbstractAbstract} other      The vector to subtract
+   * @returns {this}
+   */
+  cSubtract(other) {
+    const w1 = this.w;  // TODO: Should either w be forced to 1 if 0?
+    const w2 = other.w;
+    if ( w1 === w2 ) {
+      this.subtract(other);
+      this.w = w1;
+      return this;
+    }
+
+    // GCD
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      a[this._offset + i] = (a[this._offset + i] * w2) - (b[other._offset + i] * w1);
+    }
+    this.w = w1 * w2;
+    return this;
+  }
+
+  /**
+   * "Cartesian" or projective multiplication.
+   * If w > 1, this will adjust the points to greatest common denominator.
+   * @param {HPointAbstractAbstract} other      The vector to subtract
+   * @returns {this}
+   */
+  cMultiply(other) {
+    // [3,6,3] * [2,4,2] = [1,2,1] * [1,2,1] = [1, 4,1]
+    // w === w', w > 0: [x, y, w] * [x', y', w] = [x/w * x'/w, y/w * y'/w, 1] = [x*x', y*y', w*w]
+    // w, w' > 0: [x, y, w] * [x', y', w'] = [x/w * x'/w', y/w * y'/w', 1] = [x*x', y*y', w*w']
+
+    return this.multiply(other); // TODO: Should w be set to (this.w || 1 * other.w || 1)?
+  }
+
+  /**
+   * "Cartesian" invert. 1 / pt.
+   * Treats vectors (w === 0) as point (w === 1).
+   * @returns {this}
+   */
+  cInvert() {
+    // 1/[x,y,w] = [1/(x/w), 1/(y/w), 1] = [w/x, w/y, 1] = [w, w, x*y]
+    const a = this._buffer;
+    const w = this.w;
+    let denom = 1;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      a[this._offset + i] = w;
+      denom *= a[this._offset + i];
+    }
+    this.w = denom;
+    return this;
+  }
+
+  /**
+   * "Cartesian" divide as if non-homogenous points.
+   * If w > 1, this will adjust the points to greatest common denominator.
+   * @param {HHPointAbstract} other      The other vector to divide
+   * @returns {this}
+   */
+  cDivide(other) {
+    this.cInvert();
+    return this.cMultiply(other);
+  }
+
+  /**
+   * "Cartesian" multiply a scalar as if non-homogenous points.
+   * @param {number} c      The scalar value
+   * @returns {this}
+   */
+  cMultiplyScalar(c) {
+    // [3,6,3] * 5 = [1, 2, 1] * 5 = [5, 10, 1]
+    // Same as [15, 30, 15] -> [15, 30, 3] = [5, 10, 1]
+    // w > 0: [x, y, w] * c = [x/w * c, y/w * c, 1] = [x*c, y*c, w]
+
+    // x/w * 5 = 5x / w. The w is not multiplied.
+    // y/w * 5 = 5y / w.
+    const w = this.w; // TODO: Should we force w to 1 if it is 0?
+    this.multiplyScalar(c);
+    this.w = w;
+    return this;
+  }
+
+  /**
+   * "Cartesian" divide a scalar as if non-homogenous points.
+   * @param {number} c      The scalar value
+   * @returns {this}
+   */
+  cDivideScalar(c) {
+    // x/w / 5 = x/w * 1/5 = x / 5w.
+    // y/w / 5 = y/w * 1/5 = y / 5w.
+    this.w *= c; // TODO: Should we force w to 1 if it is 0?
+    return this;
+  }
+
+  /**
+   * "Cartesian" dot product.
+   * @param {HPointAbstractAbstract} other      The other point
+   * @returns {number}
+   */
+  cDot(other) {
+    // (w value ignored for dot)
+    // w === w', w === 0: [x,y,0] • [x',y',0] = x * x' + y * y'
+    // w or w' === 0: [x,y,0] • [x',y',w] = x * x'/w' + y * y'/w' = (x*x' + y*y')/w'
+    // w === w', w > 0: [x,y,w] • [x',y',w] = x/w * x'/w + y/w * y'/w = (x*x' + y*y') / w
+    // w, w' > 0: [x,y,w] • [x',y',w] = x/w * x'/w' + y/w * y'/w'
+    //   = (x*x')/(w*w') + (y*y')/(w*w') = (x*x' + y*y') / (w * w')
+    const a = this._buffer;
+    const b = other._buffer;
+    let out = 0;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      out += (a[this._offset + i] * b[other._offset + i]);
+    }
+    out /= (this.w * other.w); // TODO: Should we force w to 1 if it is 0?
     return out;
   }
 
@@ -828,38 +662,29 @@ export class PointArray {
    */
   cMagnitude() { return Math.sqrt(this.cMagnitudeSquared()); }
 
+  /**
+   * Cartesian magnitude squared.
+   * @returns {number}
+   */
   cMagnitudeSquared() {
     // x/w * x/w + y/w * y/w = ((x*x) + (y*y)) / w*w
-    const a = this.arr;
+    const a = this._buffer;
     let out = 0;
-    for ( let i = 0; i < this.DIMS; i += 1 ) out += (a[i] ** 2);
+    for ( let i = 0; i < this.DIMS - 1; i += 1 ) out += (a[this._offset + i] ** 2);
     out /= ((this.w || 1) ** 2);
     return out;
   }
 
-  /**
-   * Normalize by dividing this vector by the magnitude.
-   * Only well-defined for vectors.
-   * @returns {PointArrayAbstract}
-   */
-  normalize() { return this.constructor.divideScalar(this, this.magnitude(), this); }
-
-  /**
-   * Use the cartesian magnitude to normalize.
-   * @returns {PointArrayAbstract}
-   */
-  cNormalize() { return this.constructor.cDivideScalar(this, this.cMagnitude(), this); }
-
-  // ----- NOTE: Static Cross ----- //
+  // ----- NOTE: Static cross ---- //
 
   /**
    * Generalized X dimensional cross, or "perpendicular":
    * https://math.stackexchange.com/questions/2371022/cross-product-in-higher-dimensions
    * Uses determinants.
-   * @param {PointArrayAbstract} p1
-   * @param {PointArrayAbstract} p2
-   * @param {PointArrayAbstract} [out]
-   * @returns {PointArrayAbstract}
+   * @param {HPointAbstractAbstract} p1
+   * @param {HPointAbstractAbstract} p2
+   * @param {HPointAbstractAbstract} [out]
+   * @returns {HPointAbstractAbstract}
    */
   static cross(vectors = [], out) {
     if ( !vectors.length ) throw Error(`${this.name}|cross|Vector array required.`);
@@ -895,9 +720,9 @@ export class PointArray {
 
   /**
    * Generalized X dimensional cross.
-   * @param {PointArrayAbstract[]} points
-   * @param {PointArrayAbstract} [out]
-   * @returns {PointArrayAbstract}
+   * @param {HPointAbstractAbstract[]} points
+   * @param {HPointAbstractAbstract} [out]
+   * @returns {HPointAbstractAbstract}
    */
   static _cross(points = [], out) {
     // Use determinants for higher dimensions.
@@ -931,35 +756,33 @@ export class PointArray {
   /**
    * Cross two axes of two points
    * E.g., p1.x * p2.y - p2.x * p1.y or equally, p1.x * p2.y - p1.y * p2.x.
-   * @param {HPointArray} p1
-   * @param {HPointArray} p2
+   * @param {HHPointAbstract} p1
+   * @param {HHPointAbstract} p2
    * @param {number} idx1               First axis
    * @param {number} idx2               Second axis
    * @returns {number}
    */
   static cross2d(p1, p2, idx1 = 0, idx2 = 1) {
-    const a = p1.arr;
-    const b = p2.arr;
-    return (a[idx1] * b[idx2]) - (a[idx2] * b[idx1]);
+    const a = p1._buffer;
+    const b = p2._buffer;
+    return (a[p1._offset + idx1] * b[p2._offset + idx2]) - (a[p1._offset + idx2] * b[p2._offset + idx1]);
   }
 
-  // ----- NOTE: Triples ----- //
+  // ----- NOTE: Static triples ----- //
 
   /**
    * Vector triple: a x (b x c) = (a•c)b - (a•b)c
-   * @param {HPointArray} a              Vector
-   * @param {HPointArray} b              Vector
-   * @param {HPointArray} c              Vector
-   * @param {HPointArray} [outPoint]
-   * @returns {HPointArray} The out point
+   * @param {HPointAbstract} a              Vector
+   * @param {HPointAbstract} b              Vector
+   * @param {HPointAbstract} c              Vector
+   * @returns {HPointAbstract} The out point
    */
-  static vectorTriple(a, b, c, out) {
-    out ||= this.create(a.DIMS);
-    const ac = this.dot(a, c);
-    const ab = this.dot(a, b);
-    using scaledB = this.multiplyScalar(b, ac)
-    using scaledC = this.multiplyScalar(c, ab);
-    return this.subtract(out, scaledB, scaledC);
+  static vectorTriple(a, b, c) {
+    const ac = a.dot(c);
+    const ab = a.dot(b);
+    const scaledB = b.clone().multiplyScalar(ac);
+    using scaledC = c.clone().multiplyScalar(ab);
+    return scaledB.subtract(scaledC);
   }
 
   /**
@@ -969,116 +792,38 @@ export class PointArray {
    * Cyclic permutations remain unchanged: a • (b x c) = b • (c x a) = c • (a x b).
    * Switching any two vectors changes the sign: a • (b x c) = -a • (c x b).
    * In 3d, the product equals 0 if the three vectors are coplanar or two vectors are parallel.
-   * @param {HPointArray} a              Vector
-   * @param {HPointArray} b              Vector
-   * @param {HPointArray} c              Vector
+   * @param {HPointAbstract} a              Vector
+   * @param {HPointAbstract} b              Vector
+   * @param {HPointAbstract} c              Vector
    * @returns {number}
    */
   static scalarTriple(a, b, c) {
     using xBC = b.cross(c);
     return a.dot(xBC);
   }
+
 }
 
+export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBlockPoolableMixin) {
 
-
-/**
- * Two choices: Either subclass with the Pool mixin, or create a new mixin to be
- * applied per-point. (e.g. PointPoolMixin = superclass => class extends PoolableMixin(superclass))
- * Subclass shares the buffer manager while the mixin would apply a buffer manager per child point class.
- * Subclass used here; assumed to be less resource intensive.
- */
-export class HPointAbstract extends mix(PointArray).with(PoolableMixin) {
-   // ----- NOTE: Buffer manager ----- //
-
-  /** @type {number} */
-  static BUFFER_MIN_NUM = 2 ** 6;
-
-  static BUFFER_MAX_NUM = 2 ** 10;
+  /** @type {string} */
+  static _hgeomLibType = "HPoint";
 
   /**
-   * Current buffer with usable space to define points.
-   * Defined for each child class.
-   * (`static bufferManager = new bufferManager` would only define a single shared BM.)
-   * @type {BufferManager}
-   */
-  static _bufferManager;
-
-  static get bufferManager() {
-    if ( !Object.hasOwn(this, "_bufferManager") ) {
-      // Determine the dimensions of this class's object.
-      const obj = new this()
-
-      // Create a unique manager for each subclass that accesses it.
-      this._bufferManager = new BufferManager(this.BUFFER_MIN_NUM * obj.DIMS, {
-        typedClass: Float32Array,
-        maxBufferSize: this.BUFFER_MAX_NUM * obj.DIMS,
-      });
-    }
-    return this._bufferManager;
-  }
-
-  // ----- NOTE: Pooling ----- //
-
-  /**
-   * Static method triggered when the pool releases an object.
-   * @param {HPointAbstract} obj
-   */
-  static onRelease(obj) {
-    obj.arr.fill(0);
-    this.bufferManager.release(obj.arr);
-    obj.arr = []; // More compatible alternative to null.
-  }
-
-  /**
-   * Get an object from the pool.
+   * Clone a new point from ephemeral scratch memory.
+   * @param {number} nDims
    * @returns {HPointAbstract}
    */
-  static create() {
-    // Use 'this.pool' to ensure we get the pool for the specific subclass
-    const obj = this.pool.acquire();
-    obj.arr = this.bufferManager.newArray(obj.DIMS + 1);
-    obj.w = 1;
-    return obj;
+  cloneScratch(nDims) {
+    return this.clone(this.constructor.createScratch(nDims))
   }
 
   /**
-   * Like buildNObjects, but uses a distinct buffer shared only by those n object.
-   * Useful if the intent is to transfer the buffer to a worker or webGPU, for example.
-   * @param {number} n
-   * @returns {HPointAbstract[n]}
-   */
-  static allocateNObjects(n) {
-    const bm = this.bufferManager;
-
-    // Determine the object size.
-    let byteOffset = 0;
-    let obj = new this();
-    const nElems = obj.DIMS + 1;
-    const ptBytes = bm.bytesPerElement * nElems;
-    const byteSize = ptBytes * n;
-    const buffer = new ArrayBuffer(byteSize);
-    obj.release();
-
-    // Allocate the objects.
-    const objs = Array(n);
-    for ( let i = 0; i < n; i += 1 ) {
-      const obj = new this();
-      obj.arr = new bm.typedClass(buffer, byteOffset, nElems);
-      obj.w = 1;
-      objs[i] = obj;
-      byteOffset += ptBytes;
-    }
-    return objs;
-  }
-
-  // ----- NOTE: Factory methods ----- //
-
-  /**
-   * Construct a new point.
-   * Alias for HPointAbstract.create.set.
-   */
-  static construct(...args) {
-    return this.create.set(...args);
+    * Clone a point from persistent memory.
+    * @param {number} nDims
+    * @returns {HPointAbstract}
+    */
+  clonePersistent(nDims) {
+    return this.clone(this.constructor.create(nDims));
   }
 }

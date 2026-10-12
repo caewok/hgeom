@@ -27,7 +27,9 @@ export class Line3d {
    * If l (direction) is a unit vector, m is distance from the origin to the line.
    * @type {Point3d}
    */
-  moment;
+  origin;
+
+  get moment() { return this.origin; } // Synonym.
 
   [Symbol.dispose]() { this.release(); }
 
@@ -195,6 +197,36 @@ export class Line3d {
     l1.moment.cross(l2.moment, pt);
     pt.w = x0;
     return pt;
+  }
+
+  /**
+   * Calculate the intersection scalar 't', representing distance along the ray formed
+   * by origin moving in direction.
+   * @param {Plane} plane
+   * @returns {number|null}
+   */
+  intersectPlaneT(plane) {
+    // D • N: Ignores plane.d because direction.w = 0.
+    const denom = plane.dot(this.direction);
+    if ( Math.abs(denom) < 1e-06 ) return null; // Denom = 0 means ray is parallel to the plane.
+
+    // O • N + d: Automatically includes plane.d because origin.w ≠ 0.
+    const num = plane.dot(this.origin);
+
+    return -num / denom;
+  }
+
+  /**
+   * Exact spatial coordinates of the intersection.
+   * @param {Plane} plane
+   * @returns {Point3d|null}
+   */
+  intersectPlane(plane, { minT = 0, maxT = 1 } = {}) {
+    const t = this.intersectPlaneT(plane);
+    if ( t === null || t.strictlyLessThan(0) || t.strictlyGreaterThan(1) ) return null;
+
+    // NOTE: direction * t is a vector; origin + scaledDirection is a point.
+    return this.direction.cloneTemporary().multiplyScalar(t).add(this.origin);
   }
 
   /* TODO: Implement this in Triangle3d.

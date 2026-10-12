@@ -5,13 +5,18 @@ PIXI,
 "use strict";
 
 import { HPointAbstract } from "../HPointAbstract.js";
+import { PoolableMixin } from "../utils/Pool.js"
+import { mix } from "../utils/mixwith.js";
 
 
-export class HPoint2d extends HPointAbstract {
+export class HPoint2dAbstract extends HPointAbstract {
 
-  DIMS = 2;
+  /** @type {string} */
+  static _hgeomLibType = "HPoint2dAbstract";
 
-  static get newInstance() { return this.create(); }
+  DIMS = 3;
+
+  constructor() { super(3); }
 
   static build(x, y, w = 1) { return this.create().set(x, y, w); }
 
@@ -80,43 +85,161 @@ export class HPoint2d extends HPointAbstract {
     return {
       x: this._x,
       y: this._y,
-      w: this._w,
+      w: this.w,
     };
   }
 
-  /**
-   * Cross this point with another.
-   * @param {HPoint2d} other
-   * @param {HPoint2d} out
-   */
-  cross(other) {
-    // Same as this.constructor.cross but with less checks.
-    // Avoid overwriting if out is this or other.
-    const x = this.constructor.cross2d(this, other, 1, 2);
-    const y = this.constructor.cross2d(this, other, 2, 0);
-    const w = this.constructor.cross2d(this, other, 0, 1);
-    this.arr[0] = x;
-    this.arr[1] = y;
-    this.arr[2] = w;
+  static fromJSON(json) {
+    const out = this.constructor.create();
+    out._x = json.x;
+    out._y = json.y;
+    out.w = json.w;
     return out;
   }
 
 
+// ----- NOTE: Basic math operations ----- //
 
-  /*
-  2d cross product indicates orientation of a vector: ax*by - ay*bx
-  • C > 0: b is "left", CCW
-  • C < 0: b is "right", CW
-  • C = 0: vectors are parallel, antiparallel, or orthogonal
-  If C = 0, dot product distinguishes parallel from anti-parallel: D = ax*bx + ay*by
-  • D > 0: vectors are parallel; point in the same general direction
-  • D < 0: vectors are anti-parallel; point in opposite directions
-  • D = 0: vectors are perpendicular
-  angle between is cos-1(a•b / |a|•|b|) where || is magnitude
-  */
+  // Could use the parent methods; these are unrolled for speed.
+
+  /**
+   * Add another point to this one.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  add(other) {
+    this._buffer[this._offset] += other._buffer[other._offset];
+    this._buffer[this._offset + 1] += other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] += other._buffer[other._offset + 2];
+    return this;
+  }
+
+  /**
+   * Subtract another point from this one.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  subtract(other) {
+    this._buffer[this._offset] -= other._buffer[other._offset];
+    this._buffer[this._offset + 1] -= other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] -= other._buffer[other._offset + 2];
+    return this;
+  }
+
+  /**
+   * Multiply this point by another.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  multiply(other) {
+    this._buffer[this._offset] *= other._buffer[other._offset];
+    this._buffer[this._offset + 1] *= other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] *= other._buffer[other._offset + 2];
+    return this;
+  }
+
+  /**
+   * Divide this point by another.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  divide(other) {
+    this._buffer[this._offset] /= other._buffer[other._offset];
+    this._buffer[this._offset + 1] /= other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] /= other._buffer[other._offset + 2];
+    return this;
+  }
+
+  /**
+   * Multiply this point by a constant.
+   * @param {number} c
+   * @returns {this}
+   */
+  multiplyScalar(c) {
+    this._buffer[this._offset] *= c;
+    this._buffer[this._offset + 1] *= c;
+    this._buffer[this._offset + 2] *= c;
+    return this;
+  }
+
+  /**
+   * Magnitude squared (length, or sometimes distance) of this vector.
+   * Defined as the dot product of this vector with itself.
+   * Only well-defined for vectors.
+   * @returns {number}
+   */
+  magnitudeSquared() {
+    let out = 0;
+    out = this._buffer[this._offset] ** 2;
+    out = this._buffer[this._offset + 1] ** 2;
+    out = this._buffer[this._offset + 2] ** 2;
+    return out;
+  }
+
+  /**
+   * Dot product of this point with another.
+   * @param {HPointArray} other
+   * @returns {number}
+   */
+  dot(other) {
+    let out = 0;
+    out = this._buffer[this._offset] * other._buffer[other._offset];
+    out = this._buffer[this._offset + 1] * other._buffer[other._offset + 1];
+    out = this._buffer[this._offset + 2] * other._buffer[other._offset + 2];
+    return out;
+  }
+
+  // Use parent for other math methods for now.
+
+
+  // ----- NOTE: Matrix transform ----- //
+
+  /**
+   * Multiply this point by a row-major matrix.
+   * @param {Matrix<4x4>} M
+   * @returns {this}
+   */
+  transform(M) {
+    // Cache current values to prevent overwrite during calculation.
+    const { _x, _y, w } = this;
+
+    const o = M._offset;
+    const m = M._buffer;
+    this._buffer[this._offset] = m[o + 0] * _x + m[o + 1] * _y + m[o + 2] * w;
+    this._buffer[this._offset + 1] = m[o + 3] * _x + m[o + 4] * _y + m[o + 5] * w;
+    this._buffer[this._offset + 2] = m[o + 6] * _x + m[o + 7] * _y + m[o + 8] * w;
+
+    return this;
+  }
+
+  /**
+   * Generalized cross product of two 2d homogeous points.
+   * @param {HPoint2d} other
+   * @param {HPoint2d} out
+   */
+  static cross(a, b, out) {
+    out ||= this.create();
+    const x = this.constructor.cross2d(a, b, 1, 2);
+    const y = this.constructor.cross2d(a, b, 2, 0);
+    const w = this.constructor.cross2d(a, b, 0, 1);
+    out._x = x;
+    out._y = y;
+    out.w = w;
+    return out;
+  }
 
   /**
    * Orientation of this point/vector with regard to two points or a vector
+   * 2d cross product indicates orientation of a vector: ax*by - ay*bx
+   * • C > 0: b is "left", CCW
+   * • C < 0: b is "right", CW
+   * • C = 0: vectors are parallel, antiparallel, or orthogonal
+   * If C = 0, dot product distinguishes parallel from anti-parallel: D = ax*bx + ay*by
+   * • D > 0: vectors are parallel; point in the same general direction
+   * • D < 0: vectors are anti-parallel; point in opposite directions
+   * • D = 0: vectors are perpendicular
+   * angle between is cos-1(a•b / |a|•|b|) where || is magnitude
+   *
    * @param {HPoint2d} a
    * @param {HPoint2d} [b]        Used only if this is a point
    * @returns {number}
@@ -140,44 +263,18 @@ export class HPoint2d extends HPointAbstract {
    * @returns {number}
    */
   static cOrient(a, b, c) {
-    using dxAB = b.subtract(a);
-    using dxAC = c.subtract(a);
+    // Project first because it does not change the actual values and helps prevent overflows.
+    using dxAB = b.perspectiveDivide().clone().subtract(a.perspectiveDivide());
+    using dxAC = c.perspectiveDivide().clone().subtract(a.perspectiveDivide());
     return -this.cross2d(dxAB, dxAC);
   }
-
-  /**
-   * Transform a point by a 3x3 matrix.
-   * @param {Matrix<3x3} M
-   * @returns {HPoint2d}
-   */
-  transform(M) {
-    const a = M.arr;
-    const b = this.arr;
-
-    const a00 = a[0];
-    const a01 = a[1];
-    const a02 = a[2];
-
-    const a10 = a[3];
-    const a11 = a[4];
-    const a12 = a[5];
-
-    const a20 = a[6];
-    const a21 = a[7];
-    const a22 = a[8];
-
-    const b00 = b[0];
-    const b01 = b[1];
-    const b02 = b[2];
-
-    const o = this.arr;
-    o[0] = a00 * b00 + a10 * b01 + a20 * b02;
-    o[1] = a01 * b00 + a11 * b01 + a21 * b02;
-    o[2] = a02 * b00 + a12 * b01 + a22 * b02;
-
-    return this;
-  }
 }
+
+export class HPoint2d extends mix(HPoint2dAbstract).with(PoolableMixin) {
+  /** @type {string} */
+  static _hgeomLibType = "HPoint2d";
+}
+
 
 /* TODO: Are swizzles worth the trouble?
 // Add swizzle getters and setters.
@@ -218,7 +315,7 @@ for ( let i = 0; i < COORDS.length; i += 1 ) {
 
 
 
-
+/*
 if (window.devtoolsFormatters === undefined) {
   window.devtoolsFormatters = [];
 }
@@ -254,3 +351,4 @@ window.devtoolsFormatters.push({
     ];
   }
 });
+*/
