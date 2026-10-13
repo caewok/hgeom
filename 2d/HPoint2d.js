@@ -337,9 +337,9 @@ export class HPoint2d extends mix(HPoint2dAbstract).with(PoolableMixin) {
     bufferClass: BufferManager,     /** @type {class} */
   };
 
-  static #cachedPool = super.pool;
+  static #cachedPool;
 
-  static get pool() { return HPoint2d.#cachedPool; }
+  static get pool() { return HPoint2d.#cachedPool ??= super.pool; }
 }
 
 

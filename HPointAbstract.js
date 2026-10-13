@@ -845,9 +845,9 @@ export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBloc
   /** @type {string} */
   static _hgeomLibType = "HPoint";
 
-  static #cachedPool = super.pool;
+  static #cachedPool;
 
-  static get pool() { return HPoint.#cachedPool; }
+  static get pool() { return HPoint.#cachedPool ??= super.pool; }
 
   /**
    * Create a new point that contains the same values as this one.

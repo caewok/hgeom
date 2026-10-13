@@ -369,9 +369,9 @@ export class HPoint3d extends mix(HPoint3dAbstract).with(PoolableMixin) {
     bufferClass: BufferManager,     /** @type {class} */
   };
 
-  static #cachedPool = super.pool;
+  static #cachedPool;
 
-  static get pool() { return HPoint3d.#cachedPool; }
+  static get pool() { return HPoint3d.#cachedPool ??= super.pool; }
 }
 
 // ----- NOTE: DevTools formatter ----- //
