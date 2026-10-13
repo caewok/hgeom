@@ -236,10 +236,10 @@ export class HPoint3dAbstract extends HPointAbstract {
    */
   magnitudeSquared() {
     let out = 0;
-    out = this._buffer[this._offset] ** 2;
-    out = this._buffer[this._offset + 1] ** 2;
-    out = this._buffer[this._offset + 2] ** 2;
-    out = this._buffer[this._offset + 3] ** 2;
+    out += this._buffer[this._offset] ** 2;
+    out += this._buffer[this._offset + 1] ** 2;
+    out += this._buffer[this._offset + 2] ** 2;
+    out += this._buffer[this._offset + 3] ** 2;
     return out;
   }
 
@@ -250,10 +250,10 @@ export class HPoint3dAbstract extends HPointAbstract {
    */
   dot(other) {
     let out = 0;
-    out = this._buffer[this._offset] * other._buffer[other._offset];
-    out = this._buffer[this._offset + 1] * other._buffer[other._offset + 1];
-    out = this._buffer[this._offset + 2] * other._buffer[other._offset + 2];
-    out = this._buffer[this._offset + 3] * other._buffer[other._offset + 3];
+    out += this._buffer[this._offset] * other._buffer[other._offset];
+    out += this._buffer[this._offset + 1] * other._buffer[other._offset + 1];
+    out += this._buffer[this._offset + 2] * other._buffer[other._offset + 2];
+    out += this._buffer[this._offset + 3] * other._buffer[other._offset + 3];
     return out;
   }
 

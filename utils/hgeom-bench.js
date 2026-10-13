@@ -63,9 +63,17 @@ class HPoint3dF64 extends HPoint3d {
   static get pool() { return HPoint3dF64.#pool; }
 }
 
-const U = HPoint3dAbstract;   // Unpooled: identical math to HPoint3d, a new Float32Array per point.
-const P = HPoint3d;           // Pooled, Float32 slabs.
-const P64 = HPoint3dF64;      // Pooled, Float64 slabs.
+class HPoint3dF32 extends HPoint3d {
+  static BUFFER_OPTS = { ...HPoint3d.BUFFER_OPTS, arrayClass: Float32Array };
+  static #pool = Pool.getPool(HPoint3dF64, HPoint3dF64.BUFFER_OPTS);
+  static get pool() { return HPoint3dF64.#pool; }
+}
+
+
+
+const U = HPoint3dAbstract;       // Unpooled: identical math to HPoint3d, a new Float64Array per point.
+const P = HPoint3dF32;            // Pooled, Float32 slabs.
+const P64 = HPoint3dF64;          // Pooled, Float64 slabs.
 
 // ----- NOTE: Inputs ----- //
 
@@ -770,7 +778,7 @@ export function selfTest() {
     P.flushScratch();
     const before = P.pool.dormantShells.length;
     { using p = P.create(); p.set(1, 2, 3, 1); }
-    ok(P.pool.dormantShells.length === before + 1, "dispose of a persistent shell returns it");
+    ok(before ? P.pool.dormantShells.length === before : P.pool.dormantShells.length === 1, "dispose of a persistent shell returns it");
 
     // Persistent offsets are recycled; double release is rejected.
     const a = P.create();
