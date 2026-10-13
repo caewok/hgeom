@@ -74,6 +74,21 @@ export class HPoint3dAbstract extends HPointAbstract {
 
   set _z(value) { this._buffer[this._offset + 2] = value; }
 
+  // ----- NOTE: Copying and cloning ----- //
+
+  /**
+   * Set all values for this point.
+   * @param {...number}
+   * @returns {this}
+   */
+  set(x, y, z = 0, w = 1) {
+    this._x = x;
+    this._y = y;
+    this._z = z;
+    this._w = w;
+    return this;
+  }
+
   /**
    * Copy points from a given object.
    * If the object contains w, will copy directly.

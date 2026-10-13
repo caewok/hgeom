@@ -64,6 +64,18 @@ export class HPoint2dAbstract extends HPointAbstract {
   // ----- NOTE: Copying ----- //
 
   /**
+   * Set all values for this point.
+   * @param {...number}
+   * @returns {this}
+   */
+  set(x, y, w = 1) {
+    this._x = x;
+    this._y = y;
+    this._w = w;
+    return this;
+  }
+
+  /**
    * Copy points from a given object.
    * If the object contains w, will copy directly.
    * Otherwise will set x and y, setting w to 1.
