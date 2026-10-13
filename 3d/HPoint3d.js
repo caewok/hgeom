@@ -111,6 +111,29 @@ export class HPoint3dAbstract extends HPointAbstract {
     if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
   }
 
+  /**
+   * Create a new point that contains the same values as this one.
+   * @param {HPointAbstract} [out]            Object in which to store the cloned values
+   * @returns {HPointAbstract} The out object
+   */
+  clone(out) {
+    // If out is not provided, use the same memory type as this object.
+    out ||= this._isScratch ? this.constructor.createScratch() : this.constructor.create();
+    return super.clone(out);
+  }
+
+  /**
+   * Clone a new point from ephemeral scratch memory.
+   * @returns {HPointAbstract}
+   */
+  cloneScratch() { return this.clone(this.constructor.createScratch()); }
+
+  /**
+   * Clone a point from persistent memory.
+   * @returns {HPointAbstract}
+   */
+  clonePersistent() { return this.clone(this.constructor.create()); }
+
 
   toString() { return `x: ${this.x.toFixed(2)}, y: ${this.y.toFixed(2)}, z: ${this.z.toFixed(2)}, w: ${this.w.toFixed(2)}`; }
 
