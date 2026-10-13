@@ -42,6 +42,8 @@ function runBenchmark(iterations = 100000) {
   const HPoint = HGEOM.HPoint;
   const HPoint2d = HGEOM.HPoint2d;
   const HPoint3d = HGEOM.HPoint3d;
+  const HPoint2dAbstract = HGEOM.HPoint2dAbstract;
+  const HPoint3dAbstract = HGEOM.HPoint3dAbstract;
 
   const batchSize = 1000;
   let start;
@@ -112,6 +114,26 @@ function runBenchmark(iterations = 100000) {
   console.log(`  Total Time: ${time.toFixed(2)} ms`);
   console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
 
+
+  // -----------------------------------------------------------------
+  // 5. Benchmark: HPoint2dAbstract Persistent Allocation (Free-List Allocator)
+  // -----------------------------------------------------------------
+  start = performance.now();
+
+  for (let i = 0; i < iterations; i++) {
+    const pt = HPoint2dAbstract.create(4);
+    pt.set(i, i + 1, i + 2);
+  }
+
+
+  end = performance.now();
+  time = end - start
+  console.log(`[Pooled] HPoint2dAbstract.create() (Persistent with recycling):`);
+  console.log(`  Total Time: ${time.toFixed(2)} ms`);
+  console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
+
+
+
   // -----------------------------------------------------------------
   // 4. Benchmark: HPoint2d Scratch Allocation (Bump Allocator)
   // -----------------------------------------------------------------
@@ -146,7 +168,7 @@ function runBenchmark(iterations = 100000) {
       HPoint2d.release(activePool[index]);
     }
     const pt = HPoint2d.create(4);
-    pt.set(i, i + 1, i + 2, 1);
+    pt.set(i, i + 1, i + 2);
     activePool[index] = pt;
   }
   // Cleanup remainder
@@ -160,13 +182,32 @@ function runBenchmark(iterations = 100000) {
   console.log(`  Total Time: ${time.toFixed(2)} ms`);
   console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
 
+
+
+  // -----------------------------------------------------------------
+  // 5. Benchmark: HPoint3dAbstract Persistent Allocation (Free-List Allocator)
+  // -----------------------------------------------------------------
+  start = performance.now();
+
+  for (let i = 0; i < iterations; i++) {
+    const pt = HPoint3dAbstract.create(4);
+    pt.set(i, i + 1, i + 2);
+  }
+
+  end = performance.now();
+  time = end - start;
+  console.log(`[Pooled] HPoint3dAbstract.create() (Persistent with recycling):`);
+  console.log(`  Total Time: ${time.toFixed(2)} ms`);
+  console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
+
+
   // -----------------------------------------------------------------
   // 4. Benchmark: HPoint3d Scratch Allocation (Bump Allocator)
   // -----------------------------------------------------------------
   start = performance.now();
   for (let i = 0; i < iterations; i++) {
     const pt = HPoint3d.createScratch(4);
-    pt.set(i, i + 1, i + 2, 1);
+    pt.set(i, i + 1, i + 2);
 
     // Flush periodically to simulate frame ticks or batch processing boundary
     if (i % 10000 === 0) {
@@ -194,7 +235,7 @@ function runBenchmark(iterations = 100000) {
       HPoint3d.release(activePool[index]);
     }
     const pt = HPoint3d.create(4);
-    pt.set(i, i + 1, i + 2, 1);
+    pt.set(i, i + 1, i + 2);
     activePool[index] = pt;
   }
   // Cleanup remainder
@@ -218,6 +259,8 @@ function runTransformationBenchmark(iterations = 50000) {
   const HPoint = HGEOM.HPoint;
   const HPoint2d = HGEOM.HPoint2d;
   const HPoint3d = HGEOM.HPoint3d;
+  const HPoint2dAbstract = HGEOM.HPoint2dAbstract;
+  const HPoint3dAbstract = HGEOM.HPoint3dAbstract;
 
   const batchSize = 1000;
   let start;
@@ -231,8 +274,8 @@ function runTransformationBenchmark(iterations = 50000) {
   console.log(`Starting vector math transformation chain benchmark with ${iterations.toLocaleString()} iterations...\n`);
 
   // Auxiliary points used as arguments inside the chain
-  other = HPointAbstract.create(4).set(2, 2, 2, 1);
-  target = HPointAbstract.create(4).set(10, 10, 10, 1);
+  other = HPointAbstract.create(4).set(2, 2, 2);
+  target = HPointAbstract.create(4).set(10, 10, 10);
 
   // -----------------------------------------------------------------
   // 1. Benchmark: HPointAbstract Transformation Chain (Unpooled)
@@ -255,13 +298,13 @@ function runTransformationBenchmark(iterations = 50000) {
   // -----------------------------------------------------------------
   // 2. Benchmark: HPoint Scratch Transformation Chain (Bump Allocator)
   // -----------------------------------------------------------------
-  other = HPoint.createScratch(4).set(2, 2, 2, 1);
-  target = HPoint.createScratch(4).set(10, 10, 10, 1);
+  other = HPoint.createScratch(4).set(2, 2, 2);
+  target = HPoint.createScratch(4).set(10, 10, 10);
 
   start = performance.now();
   for (let i = 0; i < iterations; i++) {
     const pt = HPoint.createScratch(4);
-    pt.set(i, i + 1, i + 2, 1)
+    pt.set(i, i + 1, i + 2)
       .add(other)
       .multiplyScalar(1.5)
       .normalize()
@@ -282,8 +325,8 @@ function runTransformationBenchmark(iterations = 50000) {
   // -----------------------------------------------------------------
   // 3. Benchmark: HPoint Persistent Transformation Chain (Free-List)
   // -----------------------------------------------------------------
-  other = HPoint.create(4).set(2, 2, 2, 1);
-  target = HPoint.create(4).set(10, 10, 10, 1);
+  other = HPoint.create(4).set(2, 2, 2);
+  target = HPoint.create(4).set(10, 10, 10);
 
   start = performance.now();
   activePool = new Array(batchSize);
@@ -294,7 +337,7 @@ function runTransformationBenchmark(iterations = 50000) {
       HPoint.release(activePool[index]);
     }
     const pt = HPoint.create(4);
-    pt.set(i, i + 1, i + 2, 1)
+    pt.set(i, i + 1, i + 2)
       .add(other)
       .multiplyScalar(1.5)
       .normalize()
@@ -315,16 +358,40 @@ function runTransformationBenchmark(iterations = 50000) {
   console.log(`  Total Time: ${time.toFixed(2)} ms`);
   console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
 
+ // -----------------------------------------------------------------
+  // 3. Benchmark: HPoint2dAbstract Persistent Transformation Chain (Free-List)
+  // -----------------------------------------------------------------
+  other = HPoint2dAbstract.create(4).set(2, 2, 2);
+  target = HPoint2dAbstract.create(4).set(10, 10, 10);
+
+  start = performance.now();
+
+  for (let i = 0; i < iterations; i++) {
+    const pt = HPoint2dAbstract.create(4);
+    pt.set(i, i + 1, i + 2)
+      .add(other)
+      .multiplyScalar(1.5)
+      .normalize()
+      .lerpProject(target, 0.25);
+  }
+
+  end = performance.now();
+  time = end - start;
+  console.log(`[Pooled Persistent] HPoint2dAbstract.create() Transformation Chain:`);
+  console.log(`  Total Time: ${time.toFixed(2)} ms`);
+  console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
+
+
   // -----------------------------------------------------------------
   // 2. Benchmark: HPoint2d Scratch Transformation Chain (Bump Allocator)
   // -----------------------------------------------------------------
-  other = HPoint2d.createScratch(4).set(2, 2, 2, 1);
-  target = HPoint2d.createScratch(4).set(10, 10, 10, 1);
+  other = HPoint2d.createScratch(4).set(2, 2, 2);
+  target = HPoint2d.createScratch(4).set(10, 10, 10);
 
   start = performance.now();
   for (let i = 0; i < iterations; i++) {
     const pt = HPoint2d.createScratch(4);
-    pt.set(i, i + 1, i + 2, 1)
+    pt.set(i, i + 1, i + 2)
       .add(other)
       .multiplyScalar(1.5)
       .normalize()
@@ -345,8 +412,8 @@ function runTransformationBenchmark(iterations = 50000) {
   // -----------------------------------------------------------------
   // 3. Benchmark: HPoint2d Persistent Transformation Chain (Free-List)
   // -----------------------------------------------------------------
-  other = HPoint2d.create(4).set(2, 2, 2, 1);
-  target = HPoint2d.create(4).set(10, 10, 10, 1);
+  other = HPoint2d.create(4).set(2, 2, 2);
+  target = HPoint2d.create(4).set(10, 10, 10);
 
   start = performance.now();
   activePool = new Array(batchSize);
@@ -357,7 +424,7 @@ function runTransformationBenchmark(iterations = 50000) {
       HPoint2d.release(activePool[index]);
     }
     const pt = HPoint2d.create(4);
-    pt.set(i, i + 1, i + 2, 1)
+    pt.set(i, i + 1, i + 2)
       .add(other)
       .multiplyScalar(1.5)
       .normalize()
@@ -379,15 +446,39 @@ function runTransformationBenchmark(iterations = 50000) {
   console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
 
   // -----------------------------------------------------------------
+  // 3. Benchmark: HPoint3d Persistent Transformation Chain (Free-List)
+  // -----------------------------------------------------------------
+  other = HPoint3dAbstract.create(4).set(2, 2, 2);
+  target = HPoint3dAbstract.create(4).set(10, 10, 10);
+
+  start = performance.now();
+
+  for (let i = 0; i < iterations; i++) {
+    const pt = HPoint3dAbstract.create(4);
+    pt.set(i, i + 1, i + 2)
+      .add(other)
+      .multiplyScalar(1.5)
+      .normalize()
+      .lerpProject(target, 0.25);
+  }
+
+  end = performance.now();
+  time = end - start;
+  console.log(`[Pooled Persistent] HPoint3dAbstract.create() Transformation Chain:`);
+  console.log(`  Total Time: ${time.toFixed(2)} ms`);
+  console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
+
+
+  // -----------------------------------------------------------------
   // 2. Benchmark: HPoint3d Scratch Transformation Chain (Bump Allocator)
   // -----------------------------------------------------------------
-  other = HPoint3d.createScratch(4).set(2, 2, 2, 1);
-  target = HPoint3d.createScratch(4).set(10, 10, 10, 1);
+  other = HPoint3d.createScratch(4).set(2, 2, 2);
+  target = HPoint3d.createScratch(4).set(10, 10, 10);
 
   start = performance.now();
   for (let i = 0; i < iterations; i++) {
     const pt = HPoint3d.createScratch(4);
-    pt.set(i, i + 1, i + 2, 1)
+    pt.set(i, i + 1, i + 2)
       .add(other)
       .multiplyScalar(1.5)
       .normalize()
@@ -408,8 +499,8 @@ function runTransformationBenchmark(iterations = 50000) {
   // -----------------------------------------------------------------
   // 3. Benchmark: HPoint3d Persistent Transformation Chain (Free-List)
   // -----------------------------------------------------------------
-  other = HPoint3d.create(4).set(2, 2, 2, 1);
-  target = HPoint3d.create(4).set(10, 10, 10, 1);
+  other = HPoint3d.create(4).set(2, 2, 2);
+  target = HPoint3d.create(4).set(10, 10, 10);
 
   start = performance.now();
   activePool = new Array(batchSize);
@@ -420,7 +511,7 @@ function runTransformationBenchmark(iterations = 50000) {
       HPoint3d.release(activePool[index]);
     }
     const pt = HPoint3d.create(4);
-    pt.set(i, i + 1, i + 2, 1)
+    pt.set(i, i + 1, i + 2)
       .add(other)
       .multiplyScalar(1.5)
       .normalize()
