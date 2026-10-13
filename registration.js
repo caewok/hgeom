@@ -7,7 +7,6 @@ Hooks,
 import * as lib from "./_module.mjs";
 import { MODULE_ID, VERSION } from "./const.js"
 import { registerTests } from "./tests/index.js";
-import { Bench } from "./utils/tinybench.js";
 // import { CONFIG } from "./config.js";
 
 // Self-executing.
@@ -25,7 +24,6 @@ export function registerHGEOM() {
   module.CONST = { VERSION };
   module.CONFIG ??= {};
   module.CONFIG.controllingModule = MODULE_ID;
-  module.Bench = Bench;
   Object.assign(module, lib);
 }
 
