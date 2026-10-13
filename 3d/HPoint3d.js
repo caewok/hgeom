@@ -325,7 +325,7 @@ export class HPoint3dAbstract extends HPointAbstract {
   */
   orient(a, b, c) {
     // Y is reversed so must negate.
-    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
+    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
 
     // Could create a plane:
     // Plane.fromPoints(a, b, c).orient(this).
@@ -334,7 +334,7 @@ export class HPoint3dAbstract extends HPointAbstract {
     const vA = a.cloneScratch().subtract(this);
     const vB = b.cloneScratch().subtract(this);
     const vC = c.cloneScratch().subtract(this);
-    return this.constructor.scalarTripleVectors(vA, vB, vC);
+    return this.constructor.scalarTriple(vA, vB, vC);
 
     /* To get the determinant:
     using xABC = a.cross(b, c);
@@ -346,7 +346,7 @@ export class HPoint3dAbstract extends HPointAbstract {
    * Orient using the determinant for testing.
    */
   orientWithDet(a, b, c) {
-    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
+    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
 
     a.euclideanNormalization();
     b.euclideanNormalization();
