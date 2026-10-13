@@ -37,7 +37,7 @@ a.release()
 
 
 
-function runBenchmark(iterations = 100000) {
+export function runAllocationBenchmark(iterations = 100000) {
   const HPointAbstract = HGEOM.HPointAbstract;
   const HPoint = HGEOM.HPoint;
   const HPoint2d = HGEOM.HPoint2d;
@@ -254,7 +254,7 @@ function runBenchmark(iterations = 100000) {
 
 
 
-function runTransformationBenchmark(iterations = 50000) {
+export function runTransformationBenchmark(iterations = 50000) {
   const HPointAbstract = HGEOM.HPointAbstract;
   const HPoint = HGEOM.HPoint;
   const HPoint2d = HGEOM.HPoint2d;
@@ -533,9 +533,3 @@ function runTransformationBenchmark(iterations = 50000) {
   console.log(`  Rate: ${(iterations / (time / 1000)).toLocaleString()} ops/sec`);
 
 }
-
-// Execute the benchmark
-runBenchmark();
-
-// Execute the transformation benchmark
-runTransformationBenchmark();

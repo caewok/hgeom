@@ -7,6 +7,8 @@ export { HPointAbstract, HPoint } from "./HPointAbstract.js";
 export { HPoint2dAbstract, HPoint2d } from "./2d/HPoint2d.js";
 export { HPoint3dAbstract, HPoint3d } from "./3d/HPoint3d.js";
 
+export * as bench from "./utils/_module.mjs";
+
 /*
 export { Matrix } from "./Matrix.js";
 export { Point2d, Line2d } from "./2d/Point2d.js";
