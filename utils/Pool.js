@@ -7,6 +7,28 @@
 // Polyfill for environments that don't have it yet
 Symbol.dispose ??= Symbol("Symbol.dispose");
 
+/*
+ * Pooling overview
+ * ----------------
+ * Two things are pooled and they are pooled differently:
+ *
+ * 1. Memory (BufferManager): one big typed array ("slab") per tier, so points are views into
+ *    contiguous memory instead of one tiny typed array each.
+ * 2. Shells (Pool): the JS objects that point into a slab.
+ *
+ * Scratch tier: a bump allocator for memory AND a permanent array of shells indexed by
+ *   allocation order. Acquiring is `cursor++` plus rebinding three fields on a shell that
+ *   already exists. Flushing is `cursor = 0`. After warm-up, nothing is allocated and
+ *   nothing is pushed or popped.
+ *
+ * Persistent tier: free list of offsets for memory, stack of dormant shells.
+ *
+ * Scratch shells are owned by the pool. They are never released individually; `release` and
+ * `dispose` (`using`) are no-ops for them. A reference kept across `flushScratch` aliases
+ * whatever is allocated next. Set `Pool.DEBUG = true` to have flush invalidate them instead
+ * (offset -1, so reads return undefined/NaN), at the cost of an O(n) loop per flush.
+ */
+
 
 /* Buffer Manager
 Lightweight buffer manager partitioned into two slabs:
@@ -21,17 +43,31 @@ export class BufferManager {
   /** @type {number} */
   static DEFAULT_MAX_PERSISTENT = 1e04;
 
+  /**
+   * Typed array class backing the slabs.
+   * Float64Array avoids a float conversion on every load/store and is far more accurate for
+   * orientation tests; use Float32Array when a slab is uploaded to the GPU as-is.
+   * @type {class}
+   */
+  static DEFAULT_ARRAY_CLASS = Float64Array;
+
   /** @type {number} */
   stride = 4;
 
-  /** @type {Float32Array} */
+  /** @type {class} */
+  arrayClass
+
+  /** @type {TypedArray} */
   scratchSlab;
 
-  /** @type {Float32Array} */
+  /** @type {TypedArray} */
   persistentSlab;
 
-  /** @type {number} */
+  /** @type {number} Element index of the next free scratch slot. */
   scratchCursor = 0;
+
+  /** @type {number} Highest scratch cursor at flush time. Useful for sizing maxScratch. */
+  scratchPeak = 0;
 
   /** @type {number} */
   persistentCursor = 0;
@@ -39,14 +75,21 @@ export class BufferManager {
   /** @type {number[]} */
   persistentFreeList = [];
 
-  constructor({ stride = 4, maxScratch = this.constructor.DEFAULT_MAX_SCRATCH, maxPersistent = this.constructor.DEFAULT_MAX_PERSISTENT } = {}) {
+  constructor({
+    stride = 4,
+    maxScratch = this.constructor.DEFAULT_MAX_SCRATCH,
+    maxPersistent = this.constructor.DEFAULT_MAX_PERSISTENT,
+    arrayClass = this.constructor.DEFAULT_ARRAY_CLASS,
+    } = {}) {
+
     this.stride = stride;
+    this.arrayClass = arrayClass;
 
     // Tier 1: Scratch memory (bump allocator)
-    this.scratchSlab = new Float32Array(maxScratch * stride);
+    this.scratchSlab = new arrayClass(maxScratch * stride);
 
     // Tier 2: Persistent memory (free-list allocator)
-    this.persistentSlab = new Float32Array(maxPersistent * stride);
+    this.persistentSlab = new arrayClass(maxPersistent * stride);
   }
 
   /**
@@ -56,15 +99,19 @@ export class BufferManager {
    */
   allocScratch(n = 1) {
     const offset = this.scratchCursor;
-    this.scratchCursor += (this.stride * n);
-    if ( this.scratchCursor > this.scratchSlab.length ) throw new Error("Scratch buffer overflow! Increase size or flush more often!");
+    const next = offset + (this.stride * n);
+    if ( next > this.scratchSlab.length ) throw new Error("Scratch buffer overflow! Increase size or flush more often!");
+    this.scratchCursor = next;
     return offset;
   }
 
   /**
    * Free all scratch memory. (O(1) deallocation.)
    */
-  resetScratch() { this.scratchCursor = 0; }
+  resetScratch() {
+    this.scratchPeak = Math.max(this.scratchPeak, this.scratchCursor);
+    this.scratchCursor = 0;
+  }
 
   /**
    * Allocate memory for long-living data.
@@ -74,14 +121,36 @@ export class BufferManager {
    */
   allocPersistent(n = 1) {
     let offset;
-    if ( n === 1 && this.persistentFreeList.length > 0 ) offset = this.persistentFreeList.pop();
-    else {
-      offset = this.persistentCursor;
-      this.persistentCursor += (this.stride * n);
+    if ( n === 1 && this.persistentFreeList.length > 0 ) return this.persistentFreeList.pop()p;
+    return this._bumpPersistent(n);
+  }
 
-      // TODO: Need a way to handle growing this.
-      if ( this.persistentCursor > this.persistentSlab.length ) throw new Error("Persistent buffer overflow! Increase size!");
-    }
+  /**
+   * Allocate a contiguous run of equal-sized blocks that can later be freed one-by-one.
+   * @param {number} count        Number of blocks
+   * @param {number} [units=1]    Size of each block in strides
+   * @returns {number} Offset of the first block, or -1 if no contiguous run is left.
+   *   (Freed blocks are not coalesced.) The caller then falls back to allocating one-by-one.
+   *   Block i is at first + i * units * stride.
+   */
+  allocPersistentRun(count, units = 1) {
+    if ( this.persistentCursor + (this.stride * count * units) > this.persistentSlab.length ) return -1;
+    return this._bumpPersistent(count * units);
+  }
+
+  /**
+   * Increase the persistent slab block cursor.
+   * @protected
+   * @param {number} n        Number of objects to add
+   * @returns {number} Offset of the first object.
+   */
+  _bumpPersistent(n) {
+    const offset = this.persistentCursor;
+    const next = offset + (this.stride * n);
+
+    // TODO: Need a way to handle growing this. Growing in place would invalidate every shell's _buffer.
+    if ( next > this.persistentSlab.length ) throw new Error("Persistent buffer overflow! Increase size!");
+    this.persistentCursor = next;
     return offset;
   }
 
@@ -92,13 +161,23 @@ export class BufferManager {
   freePersistent(offset) { this.persistentFreeList.push(offset); }
 }
 
+/**
+ * Buffer manager for objects that span a variable number of strides.
+ * Free blocks are kept in bins by exact size; a request that finds no exact bin splits the
+ * smallest larger block. Free blocks are not coalesced.
+ */
 export class VariableBlockBufferManager extends BufferManager {
 
-  /** @type {Map<number, number} Maps offset --> length in strides */
-  persistentBlockSizes = new Map();
+  /** @type {Uint32Array} Block size in strides, indexed by offset / stride. 0 = not allocated. */
+  persistentBlockSizes;
 
-  /** @type {Array<{offset: number, length: number}>} */
-  persistentFreeBlocks = [];
+  /** @type {Map<number, number[]>} Maps size in strides --> stack of free offsets. */
+  persistentFreeBins = new Map();
+
+  constructor(opts) {
+    super(opts);
+    this.persistentBlockSizes = new Uint32Array(this.persistentSlab.length / this.stride);
+  }
 
   /**
    * Allocate memory for long-living data supporting variable lengths.
@@ -106,26 +185,44 @@ export class VariableBlockBufferManager extends BufferManager {
    * @returns {number} Starting offset of the block
    */
   allocPersistent(n = 1) {
-    let offset;
+    const stride = this.stride;
+    let offset = -1;
 
-    // Search for a block of sufficient size (first-to-fit).
-    const freeIndex = this.persistentFreeBlocks.findIndex(b => b.length >= n);
-    if ( ~freeIndex ) {
-      const block = this.persistentFreeBlocks.splice(freeIndex, 1)[0];
-      offset = block.offset;
-
-      // If the free block is larger than needed, return he remainder.
-      if ( block.length > n ) this.persistentFreeBlocks.push({
-        offset: offset + (this.stride * n),
-        length: block.length - n,
-      });
-
-    // Otherwise, allocate from the cursor.
-    } else offset = super.allocPersistent(n);
+    const exact = this.persistentFreeBins.get(n);
+    if ( exact && exact.length ) offset = exact.pop();
+    else {
+      // Smallest block that is big enough; return remainder to its bin.
+      let bestSize = Number.POSITIVE_INFINITY;
+      for ( const [size, bin] of this.persistentFreeBins ) {
+        if ( size > n && size < bestSize && bin.length ) bestSize = size;
+      }
+      if ( bestSize !== Number.POSITIVE_INFINITY ) {
+        offset = this.persistentFreeBins.get(bestSize).pop();
+        this._pushFree(offset + (stride * n), bestSize - n);
+      }
+    }
+    if ( offset < 0 ) offset = this._bumpPersistent(n);
 
     // Record block size to free later.
-    this.persistentBlockSizes.set(offset, n);
+    this.persistentBlockSizes[offset / stride] = n;
     return offset;
+  }
+
+  /**
+   * Allocate a contiguous run of equal-sized blocks that can later be freed one-by-one.
+   * Each block in the run is recorded separately so it can be freed on its own.
+   * @param {number} count        Number of blocks
+   * @param {number} [units=1]    Size of each block in strides
+   * @returns {number} Offset of the first block, or -1 if no contiguous run is left.
+   *   (Freed blocks are not coalesced.) The caller then falls back to allocating one-by-one.
+   *   Block i is at first + i * units * stride.
+   */
+  allocPersistentRun(count, units = 1) {
+    const stride = this.stride;
+    const first = super.allocPersistentRun(count, units);
+    if ( first < 0 ) return first;
+    for ( let i = 0; i < count; i += 1 ) this.persistentBlockSizes[(first / stride) + (i * units)] = units;
+    return first;
   }
 
   /**
@@ -133,15 +230,27 @@ export class VariableBlockBufferManager extends BufferManager {
    * @param {number} offset   The beginning of the block to free.
    */
   freePersistent(offset) {
-    const length = this.persistentBlockSizes.get(offset);
-    if ( typeof length === "undefined" ) {
+    const idx = offset / this.stride;
+    const n = this.persistentBlockSizes[idx];
+    if ( !n ) {
       console.warn(`VariableBlockManagerBuffer|Attempted to free unknown persistent offset: ${offset}`);
       return;
     }
-    this.persistentBlockSizes.delete(offset);
-    super.freePersistent(offset);
+    this.persistentBlockSizes[idx] = 0;
+    this._pushFree(offset, n);
   }
 
+  /**
+   * Free variable-length block.
+   * @protected
+   * @param {number} offset
+   * @param {number} n
+   */
+  _pushFree(offset, n) {
+    let bin = this.persistentFreeBins.get(n);
+    if ( !bin ) { bin = []; this.persistentFreeBins.set(n, bin); }
+    bin.push(offset);
+  }
 }
 
 /* Pool
@@ -149,41 +258,74 @@ Manages reusable Javascript "shells" and connects them with BufferManager.
 */
 export class Pool {
 
+  /**
+   * Debug checks. Off by default because they are on the hot path.
+   * - flushScratch invalidates scratch shells so stale references fail loudly.
+   * - release verifies the shell's class.
+   * @type {boolean}
+   */
+  static DEBUG = false;
+
   /** @type {class} */
   cl;
 
   /** @type {BufferManager} */
   bufferManager;
 
-  /** @type {*} */
-  dormantShells = []; // Cached shells no longer in use.
+  /** @type {*[]} Persistent shells no longer in use. */
+  dormantShells =  [];
 
-  /** @type {*} */
-  activeScratchShells = []; // Shells bound tot he bump allocator.
+  /** @type {*[]} Scratch shells, in allocation order. Created lazily, never discarded. */
+  scratchShells = [];
+
+  /** @type {number} How many scratch shells handed out since last flush */
+  scratchShellCount = 0;
 
   constructor(cl, bufferManager) {
     this.cl = cl;
     this.bufferManager = bufferManager;
   }
 
+  // ----- NOTE: Shell management ----- //
+
   /**
-   * Get an instantiated shell from the cache or construct a new one.
+   * Get a persistent shell from the cache or construct a new one.
    * @returns {*} An instantiated member of the pool's class.
    */
   _getShell() {
-    const shell = this.dormantShells.pop() ?? new this.cl();
+    let shell = this.dormantShells.pop();
+    if ( shell === undefined ) shell = new this.cl();
     shell._isDormant = false; // Mark as active.
     return shell;
   }
+
+  /**
+   * Get the next scratch shell, creating it the first time this slot is used.
+   * @returns {*} An instantiated member of the pool's class.
+   */
+  _getScratchShell() {
+    const i = this.scratchShellCount;
+    let shell = this.scratchShells[i];
+    if ( shell === undefined ) {
+      shell = new this.cl();
+      this.scratchShells[i] = shell;
+    }
+    this.scratchShellCount = i + 1;
+    shell._isDormant = false;
+    return shell;
+  }
+
+  // ----- NOTE: Scratch ---- //
 
   /**
    * Acquire an ephemeral object.
    * @returns {*} An instantiated member of the pool's class.
    */
   acquireScratch() {
-    const shell = this._getShell();
-    const offset = this.bufferManager.allocScratch();
-    shell._init(this.bufferManager.scratchSlab, offset, true);
+    const bm = this.bufferManager;
+    const offset = bm.allocScratch(); // Throws on overflow, before any shell consumed.
+    const shell = this._getScratchShell();
+    shell._init(bm.scratchSlab, offset, true);
     return shell;
   }
 
@@ -193,40 +335,49 @@ export class Pool {
    * @returns {*[]} An array of instantiated members of the pool's class.
    */
   acquireScratchN(n = 1) {
-    const stride = this.bufferManager.stride;
-    const firstOffset = this.bufferManager.allocScratch(n);
+    const bm = this.bufferManager;
+    const stride = bm.stride;
+    const firstOffset = bm.allocScratch(n);
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
-      const shell = this._getShell();
-      shell._init(this.bufferManager.scratchSlab, firstOffset + (stride * i), true);
+      const shell = this._getScratchShell();
+      shell._init(bm.scratchSlab, firstOffset + (stride * i), true);
       shells[i] = shell;
     }
     return shells;
   }
+
+  // ----- NOTE: Persistent ----- //
 
   /**
    * Acquire a persistent object, requiring manual disposal.
    * @returns {*} An instantiated member of the pool's class.
    */
   acquirePersistent() {
+    const bm = this.bufferManager;
+    const offset = bm.allocPersistent();
     const shell = this._getShell();
-    const offset = this.bufferManager.allocPersistent();
-    shell._init(this.bufferManager.persistentSlab, offset, false);
+    shell._init(bm.persistentSlab, offset, false);
     return shell;
   }
 
   /**
    * Acquire a number of persistent objects from the buffer.
+   * Objects are contiguous but can be released individually.
    * @param {number} [n=1]
    * @returns {*[]} An array of instantiated members of the pool's class.
    */
   acquirePersistentN(n = 1) {
-    const stride = this.bufferManager.stride;
-    const firstOffset = this.bufferManager.allocPersistent(n);
+    const bm = this.bufferManager;
+    const stride = bm.stride;
+    const firstOffset = bm.allocPersistent(n);
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getShell();
-      shell._init(this.bufferManager.persistentSlab, firstOffset + (stride * i), false);
+
+      // Contiguous when the slab has room; otherwise recycle freed slots one by one.
+      const offset = firstOffset < 0 ? bm.allocPersistent : firstOffset + (stride * i);
+      shell._init(bm.persistentSlab, offset, false);
       shells[i] = shell;
     }
     return shells;
@@ -236,10 +387,16 @@ export class Pool {
   /**
    * Allocate a special block not tied to the persistent memory.
    * Useful when creating a large number of points, e.g., for a Polygon.
+   * @param {number} n
+   * @param {number} [stride]
+   * @param {number} [arrayClass]
+   * @returns {*[]}
    */
-  acquireBlock(n, stride) {
-    stride ??= this.bufferManager.stride;
-    const buffer = new Float32Array(n * stride);
+  acquireBlock(n, stride, arrayClass) {
+    const bm = this.bufferManager;
+    stride ??= bm.stride;
+    arrayClass ??= bm.arrayClass;
+    const buffer = new arrayClass(n * stride);
     const out = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const offset = i * stride;
@@ -250,45 +407,47 @@ export class Pool {
     return out;
   }
 
+  // ----- NOTE: Release ----- //
+
   /**
    * Manually release persistent object.
+   * Scratch and block shells are ignored; they are reclaimed by flushScratch or garbage collection.
    * @param {*} shell An instantiated member of the pool's class.
    */
   release(shell) {
-    if ( !(shell instanceof this.cl) ) {
-      console.warn(`${shell.constructor.name} shell does not match pool ${this.cl.name}`);
-      return;
-    }
+    if ( shell._isScratch ) return;
     if ( shell._isDormant ) {
       console.warn(`${shell.constructor.name}|Attempted to release already dormant shell.`);
       return;
     }
-    if ( !shell._isScratch ) this.bufferManager.freePersistent(shell._offset);
-    this._addDormantShell(shell);
+    if ( Pool.DEBUG && shell.constructor !== this.cl ) {
+      console.warn(`${shell.constructor.name} shell does not match pool ${this.cl.name}`);
+      return;
+    }
+
+    this.bufferManager.freePersistent(shell._offset);
+    shell._offset = -1; // Safety severing.
+    shell._isDormant = true;
+    this.dormantShells.push(shell);
+
   }
 
   /**
    * Flush all scratch memory and reclaim all scratch shells.
    * Call at key end points, like after a token drag or on animation tick.
+   * O(1) unless Pool.DEBUG.
    */
   flushScratch() {
     this.bufferManager.resetScratch();
-
-    // Push all active scratch shells back to the dormant pool.
-    for ( let i = 0; i < this.activeScratchShells.length; i += 1 ) {
-      const shell = this.activeScratchShells[i];
-      this._addDormantShell(shell);
+    if ( Pool.DEBUG ) {
+      for ( let i = 0, n = this.scratchShellCount; i < n; i += 1 ) {
+        const shell = this.scratchShells[i];
+        shell._offset = -1; // Safety severing. See _addDormantShell.
+        shell._isDormant = true;
+      }
     }
-    this.activeScratchShells.length = 0;
+    this.scratchShellCount = 0;
   }
-
-  _addDormantShell(shell) {
-    shell._offset = -1; // Safety severing.
-    shell._isDormant = true;
-    this.dormantShells.push(shell);
-  }
-
-
 
   // ----- NOTE: Static pool tracking ----- //
 
@@ -305,28 +464,35 @@ export class Pool {
    * @returns {Pool}
    */
   static getPool(cl, bufferOpts = {}) {
-    if ( !Pool.#poolRegistry.has(cl) ) { // Use Pool so children can access.
+    let pool = Pool.#poolRegistry.get(cl); // Use Pool so children can access.
+    if ( !pool ) {
       const bufferClass = bufferOpts.bufferClass || BufferManager;
-      const bufferMgr = new bufferClass(bufferOpts);
-      Pool.#poolRegistry.set(cl, new this(cl, bufferMgr));
+      const pool = new this(cl, new bufferClass(bufferOpts));
+      Pool.#poolRegistry.set(cl, pool);
     }
-    return Pool.#poolRegistry.get(cl);
+    return pool;
   }
 }
 
+/**
+ * Pool for objects whose length (nDims) is chosen at creation.
+ * Each object takes ceil(nDims / stride) strides. Shell DIMS is set on every acquire because
+ * shells are recycled across different lengths.
+ */
 export class VariableBlockPool extends Pool {
 
   /**
    * Acquire an ephemeral object.
-   * @param {number} [nDims=3]  Length of that object
+   * @param {number} [nDims=4]  Length of that object
    * @returns {*} An instantiated member of the pool's class.
    */
-  acquireScratch(nDims = 3) {
-    const stride = this.bufferManager.stride;
-    const n = Math.ceil(nDims / stride); // Need sufficient block size to cover the nDims.
-    const shell = this._getShell();
-    const offset = this.bufferManager.allocScratch(n);
-    shell._init(this.bufferManager.scratchSlab, offset, true);
+  acquireScratch(nDims = 4) {
+    const bm = this.bufferManager;
+    const n = Math.ceil(nDims / bm.stride); // Need sufficient block size to cover the nDims.
+    const offset = bm.allocScratch(n);
+    const shell = this._getScratchShell();
+    shell._init(bm.scratchSlab, offset, true);
+    shell.DIMS = nDims;
     return shell;
   }
 
@@ -336,14 +502,15 @@ export class VariableBlockPool extends Pool {
    * @param {number} [nDims=3]    Length of each object (must be the same for each)
    * @returns {*[]} An array of instantiated members of the pool's class.
    */
-  acquireScratchN(nObjects = 1, nDims = 3) {
-    const stride = this.bufferManager.stride;
-    const n = Math.ceil((nDims * nObjects) / stride);
-    const firstOffset = this.bufferManager.allocScratch(n);
-    const shells = new Array(n);
-    for ( let i = 0; i < n; i += 1 ) {
-      const shell = this._getShell();
-      shell._init(this.bufferManager.scratchSlab, firstOffset + (stride * i), true);
+  acquireScratchN(nObjects = 1, nDims = 4) {
+    const bm = this.bufferManager;
+    const step = Math.ceil(nDims / bm.stride) * bm.stride; // Elements per object.
+    const firstOffset = bm.allocScratch(nObjects * (step / bm.stride));
+    const shells = new Array(nObjects);
+    for ( let i = 0; i < nObjects; i += 1 ) {
+      const shell = this._getScratchShell();
+      shell._init(bm.scratchSlab, firstOffset + (step * i), true);
+      shell.DIMS = nDims;
       shells[i] = shell;
     }
     return shells;
@@ -354,47 +521,57 @@ export class VariableBlockPool extends Pool {
    * @param {number} [nDims=3]    Length of the object
    * @returns {*} An instantiated member of the pool's class.
    */
-  acquirePersistent(nDims) {
-    const stride = this.bufferManager.stride;
-    const n = Math.ceil(nDims / stride); // Need sufficient block size to cover the nDims.
-    const shell = this._getShell();
+  acquirePersistent(nDims = 4) {
+    const bm = this.bufferManager;
+    const n = Math.ceil(nDims / bm.stride); // Need sufficient block size to cover the nDims.
     const offset = this.bufferManager.allocPersistent(n);
-    shell._init(this.bufferManager.persistentSlab, offset, false);
+    const shell = this._getShell();
+    shell._init(bm.persistentSlab, offset, false);
+    shell.DIMS = nDims;
     return shell;
   }
 
   /**
    * Acquire a number of persistent objects from the buffer.
+   * Objects are contiguous but can be released individually.
    * @param {number} [n=1]
-   * @param {number} [nDims=3]    Length of each object
+   * @param {number} [nDims=4]    Length of each object
    * @returns {*[]} An array of instantiated members of the pool's class.
    */
-  acquirePersistentN(nObjects = 1, nDims = 3) {
-    const stride = this.bufferManager.stride;
-    const n = Math.ceil((nDims * nObjects) / stride);
-    const firstOffset = this.bufferManager.allocPersistent(n);
-    const shells = new Array(n);
-    for ( let i = 0; i < n; i += 1 ) {
+  acquirePersistentN(nObjects = 1, nDims = 4) {
+    const bm = this.bufferManager;
+    const units = Math.ceil(nDims / bm.stride);
+    const step = units * bm.stride;
+    const firstOffset = bm.allocPersistentRun(nObjects, units);
+    const shells = new Array(nObjects);
+    for ( let i = 0; i < nObjects; i += 1 ) {
       const shell = this._getShell();
-      shell._init(this.bufferManager.persistentSlab, firstOffset + (stride * i), false);
+      const offset = firstOffset < 0 ? bm.allocPersistent(units) : firstOffset + (step * i);
+      shell._init(bm.persistentSlab, offset, false);
+      shell.DIMS = nDims;
       shells[i] = shell;
     }
     return shells;
   }
 
   /**
-   * Allocate a special block not tied to the persistent memory.
-   * Useful when creating a large number of points, e.g., for a Polygon.
+   * Allocate a special block not tied to the pool's slabs.
+   * @param {number} [nObjects=1]
+   * @param {number} [nDims=4]
+   * @param {number} [stride]     Elements per object. Defaults to nDims.
+   * @returns {*[]}
    */
-  acquireBlock(nObjects = 1, nDims = 3, stride) {
-    stride ??= this.bufferManager.stride;
-    const n = Math.ceil((nDims * nObjects) / stride);
-    const buffer = new Float32Array(n * stride);
+  acquireBlock(nObjects = 1, stride, arrayClass) {
+    const bm = this.bufferManager;
+    stride ??= bm.stride;
+    arrayClass ??= bm.arrayClass;
+    const buffer = new arrayClass(nObjects * stride);
     const out = new Array(nObjects);
     for ( let i = 0; i < nObjects; i += 1 ) {
-      const offset = i * stride;
       const shell = this._getShell();
-      shell._init(buffer, offset, true); // Treat as scratch so releasing just keeps the shell.
+      shell._init(buffer, i * stride, true); // Treat as scratch so releasing just keeps the shell.
+      shell.DIMS = stride;
+      shell._isDormant = false;
       out[i] = shell;
     }
     return out;
@@ -421,7 +598,7 @@ export const PoolableMixin = superclass => class extends superclass {
    * An instantiation of the object created when using new pool.cl
    */
 
-  /** @type {Float32Array} */
+  /** @type {Float64Array} */
   _buffer = null;
 
   /** @type {number} */
@@ -508,18 +685,24 @@ export const PoolableMixin = superclass => class extends superclass {
    * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using
    * When the 'using' block ends, this is called automatically.
    */
-  [Symbol.dispose]() { this.constructor._release(this); }
+  [Symbol.dispose]() { if ( !this._isScratch ) this.constructor.release(this); }
 
   /**
    * Release an instance back to the pool and trigger cleanup.
    * @param {Poolable} objs
    */
-  static _release(obj) {
+  static release(obj) {
     this.onRelease(obj); // Optional cleanup hook.
     this.pool.release(obj);
   }
 
-  static release(...objs) { objs.forEach(obj => this._release(obj)); }
+  /**
+   * Release instances back to the pool and trigger cleanup.
+   * @param {Poolable} ...
+   */
+  static releaseAll(obj) {
+    for ( let i = 0, n = arguments.length; i < n; i += 1 ) this.release(arguments[i]);
+  }
 
   static onRelease(_obj) { }
 
