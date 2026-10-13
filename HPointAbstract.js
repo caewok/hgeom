@@ -14,7 +14,7 @@ import { mix } from "./utils/mixwith.js";
 
 export class HPointAbstract {
 
-  /** @type {Float64Array} */
+  /** @type {Float32Array} */
   _buffer = null;
 
   /** @type {number} */
@@ -31,7 +31,7 @@ export class HPointAbstract {
   }
 
   _init() {
-    this._buffer = new Float64Array(this.DIMS);
+    this._buffer = new Float32Array(this.DIMS);
   }
 
   // ----- NOTE: Copying and cloning ----- //
@@ -39,11 +39,11 @@ export class HPointAbstract {
   /**
    * A view of the underlying buffer.
    * For consistency with Pooled classes.
-   * @type {Float64Array[this.DIMS]}
+   * @type {Float32Array[this.DIMS]}
    */
   get arr() {
     if ( !~this._offset ) return new Array(this.DIMS);
-    return new Float64Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
+    return new Float32Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
   }
 
   /**
@@ -124,20 +124,6 @@ export class HPointAbstract {
    * @returns {HPointAbstract}
    */
   static build(...args) { return this.create(args.length).set(...args); }
-
-  /**
-   * Create a new point, setting w = 1.
-   * @param {number} ...
-   * @returns {HPointAbstract}
-   */
-  static buildPoint(...args) { return this.create(args.length + 1).set(...args, 1); }
-
-  /**
-   * Create a new point, setting w = 0.
-   * @param {number} ...
-   * @returns {HPointAbstract}
-   */
-  static buildVector(...args) { return this.create(args.length + 1).set(...args, 0); }
 
   /**
    * Create a new point with zero values but for the 1 at the end.
@@ -498,7 +484,7 @@ export class HPointAbstract {
 
   // Cross-multiplies the w, effectively delaying division.
   // Use perspectiveDivide to set w back to 1.
-  // Caution: Can result in buffer overrun for Float64Array values if w gets too high.
+  // Caution: Can result in buffer overrun for Float32Array values if w gets too high.
 
   /**
    * Perspective divide this point to convert it to standard 3D Cartesian point p.
@@ -772,7 +758,7 @@ export class HPointAbstract {
     using mat = HGEOM.Matrix.create(fullDims - 1, fullDims); // E.g., 3x4.
     for ( let i = 0; i < nDims; i += 1 ) {
       const pt = points[i];
-      mat.setRow(i, pt.subarray(pt._offset, pt._offset + pt.DIMS));
+      mat.setRow(i, pt._buffer.subarray(pt._offset, pt._offset + pt.DIMS));
     }
 
     // Use Cramer's rule-style minors.
@@ -908,7 +894,7 @@ const hPointFormatter = {
     return [
       'div',
       { style: 'padding-left: 10px; line-height: 1.5;' },
-      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float64Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float32Array): '], ['object', { object: arr }]],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(obj.w)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],

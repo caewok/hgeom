@@ -120,8 +120,7 @@ export class BufferManager {
    * @returns {number} The first offset of the block. For n > 1, it is assumed the caller knows or gets this.stride.
    */
   allocPersistent(n = 1) {
-    let offset;
-    if ( n === 1 && this.persistentFreeList.length > 0 ) return this.persistentFreeList.pop()p;
+    if ( n === 1 && this.persistentFreeList.length > 0 ) return this.persistentFreeList.pop();
     return this._bumpPersistent(n);
   }
 
@@ -370,13 +369,13 @@ export class Pool {
   acquirePersistentN(n = 1) {
     const bm = this.bufferManager;
     const stride = bm.stride;
-    const firstOffset = bm.allocPersistent(n);
+    const firstOffset = bm.allocPersistentRun(n);
     const shells = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getShell();
 
       // Contiguous when the slab has room; otherwise recycle freed slots one by one.
-      const offset = firstOffset < 0 ? bm.allocPersistent : firstOffset + (stride * i);
+      const offset = firstOffset < 0 ? bm.allocPersistent() : firstOffset + (stride * i);
       shell._init(bm.persistentSlab, offset, false);
       shells[i] = shell;
     }
@@ -467,7 +466,7 @@ export class Pool {
     let pool = Pool.#poolRegistry.get(cl); // Use Pool so children can access.
     if ( !pool ) {
       const bufferClass = bufferOpts.bufferClass || BufferManager;
-      const pool = new this(cl, new bufferClass(bufferOpts));
+      pool = new this(cl, new bufferClass(bufferOpts));
       Pool.#poolRegistry.set(cl, pool);
     }
     return pool;
@@ -700,7 +699,7 @@ export const PoolableMixin = superclass => class extends superclass {
    * Release instances back to the pool and trigger cleanup.
    * @param {Poolable} ...
    */
-  static releaseAll(obj) {
+  static releaseAll() {
     for ( let i = 0, n = arguments.length; i < n; i += 1 ) this.release(arguments[i]);
   }
 
