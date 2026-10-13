@@ -120,6 +120,20 @@ export class HPointAbstract {
   static build(...args) { return this.create(args.length).set(...args); }
 
   /**
+   * Create a new point, setting w = 1.
+   * @param {number} ...
+   * @returns {HPointAbstract}
+   */
+  static buildPoint(...args) { return this.create(args.length + 1).set(...args, 1); }
+
+  /**
+   * Create a new point, setting w = 0.
+   * @param {number} ...
+   * @returns {HPointAbstract}
+   */
+  static buildVector(...args) { return this.create(args.length + 1).set(...args, 0); }
+
+  /**
    * Create a new point with zero values but for the 1 at the end.
    * @param {number} nDims            Number of dimensions
    * @param {HPointAbstract} [out]        Where to store the result

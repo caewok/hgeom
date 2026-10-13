@@ -22,6 +22,22 @@ export class HPoint2dAbstract extends HPointAbstract {
 
   static build(x, y, w = 1) { return this.create().set(x, y, w); }
 
+  /**
+   * Create a new point, setting w = 1.
+   * @param {number} x
+   * @param {number} y
+   * @returns {HPointAbstract}
+   */
+  static buildPoint(x, y) { return this.create().set(x, y, 1); }
+
+  /**
+   * Create a new point, setting w = 0.
+   * @param {number} x
+   * @param {number} y
+   * @returns {HPointAbstract}
+   */
+  static buildVector(x, y) { return this.create().set(x, y, 0); }
+
   // ----- NOTE: Getters and setters ----- //
 
   // Convention: pt.x to access the calculated value, pt._x to access the array value.

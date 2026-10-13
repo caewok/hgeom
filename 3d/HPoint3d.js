@@ -23,7 +23,29 @@ export class HPoint3dAbstract extends HPointAbstract {
 
   constructor() { super(4); }
 
+  // ----- NOTE: Static factory methods ----- //
+
   static build(x, y, z = 0, w = 1) { return this.create().set(x, y, z, w); }
+
+  /**
+   * Create a new point, setting w = 1.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @returns {HPointAbstract}
+   */
+  static buildPoint(x, y, z) { return this.create().set(x, y, z, 1); }
+
+  /**
+   * Create a new point, setting w = 0.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @returns {HPointAbstract}
+   */
+  static buildVector(x, y, z) { return this.create().set(x, y, z, 0); }
+
+  // ----- NOTE: Getters and setters ----- //
 
   /** @type {number} */
   get x() { return this._x / (this._w || 1); }
