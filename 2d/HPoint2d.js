@@ -76,22 +76,25 @@ export class HPoint2dAbstract extends HPointAbstract {
   }
 
   /**
-   * Copy points from a given object.
-   * If the object contains w, will copy directly.
-   * Otherwise will set x and y, setting w to 1.
-   * @param {object}
-   * @returns {HPoint2d}
+   * Copy values from another point to this one.
+   * If w is not present, it will be assumed to be 1.
+   * @param {HPointAbstract} other
+   * @returns {this}
    */
-  copyFrom(obj, out) {
-    super.copyFrom(obj, out);
+  copyFrom(obj) {
+    this.w = 1;
+    if ( Object.hasOwn(obj, "_buffer") ) return super.copyFrom(obj);
 
-    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
-    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+    if ( Object.hasOwn(obj, "_x") ) this._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) this._x = obj.x;
 
-    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
-    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+    if ( Object.hasOwn(obj, "_y") ) this._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) this._y = obj.y;
 
-    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+    if ( Object.hasOwn(obj, "_w") ) this._w = obj._w;
+    else if ( Object.hasOwn(obj, "w") ) this.w = obj.w;
+
+    return this;
   }
 
   /**

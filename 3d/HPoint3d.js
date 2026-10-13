@@ -90,13 +90,13 @@ export class HPoint3dAbstract extends HPointAbstract {
   }
 
   /**
-   * Copy points from a given object.
-   * If the object contains w, will copy directly.
-   * Otherwise will set x and y, setting w to 1.
-   * @param {object}
-   * @returns {HPoint2d}
+   * Copy values from another point to this one.
+   * If w is not present, it will be assumed to be 1.
+   * @param {HPointAbstract} other
+   * @returns {this}
    */
   copyFrom(obj, out) {
+    this.w = 1;
     super.copyFrom(obj, out);
 
     if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
@@ -109,6 +109,9 @@ export class HPoint3dAbstract extends HPointAbstract {
     else if ( Object.hasOwn(obj, "z") ) out._z = obj.z;
 
     if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+    else if ( Object.hasOwn(obj, "w") ) this.w = obj.w;
+
+    return this;
   }
 
   /**
