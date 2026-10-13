@@ -143,7 +143,7 @@ export class HPoint2dAbstract extends HPointAbstract {
   }
 
   static fromJSON(json) {
-    const out = this.constructor.create();
+    const out = this.create();
     out._x = json.x;
     out._y = json.y;
     out.w = json.w;
@@ -223,9 +223,9 @@ export class HPoint2dAbstract extends HPointAbstract {
    */
   magnitudeSquared() {
     let out = 0;
-    out = this._buffer[this._offset] ** 2;
-    out = this._buffer[this._offset + 1] ** 2;
-    out = this._buffer[this._offset + 2] ** 2;
+    out += this._buffer[this._offset] ** 2;
+    out += this._buffer[this._offset + 1] ** 2;
+    out += this._buffer[this._offset + 2] ** 2;
     return out;
   }
 
@@ -236,9 +236,9 @@ export class HPoint2dAbstract extends HPointAbstract {
    */
   dot(other) {
     let out = 0;
-    out = this._buffer[this._offset] * other._buffer[other._offset];
-    out = this._buffer[this._offset + 1] * other._buffer[other._offset + 1];
-    out = this._buffer[this._offset + 2] * other._buffer[other._offset + 2];
+    out += this._buffer[this._offset] * other._buffer[other._offset];
+    out += this._buffer[this._offset + 1] * other._buffer[other._offset + 1];
+    out += this._buffer[this._offset + 2] * other._buffer[other._offset + 2];
     return out;
   }
 
@@ -272,9 +272,9 @@ export class HPoint2dAbstract extends HPointAbstract {
    */
   static cross(a, b, out) {
     out ||= this.create();
-    const x = this.constructor.cross2d(a, b, 1, 2);
-    const y = this.constructor.cross2d(a, b, 2, 0);
-    const w = this.constructor.cross2d(a, b, 0, 1);
+    const x = this.cross2d(a, b, 1, 2);
+    const y = this.cross2d(a, b, 2, 0);
+    const w = this.cross2d(a, b, 0, 1);
     out._x = x;
     out._y = y;
     out.w = w;
@@ -317,8 +317,10 @@ export class HPoint2dAbstract extends HPointAbstract {
    */
   static cOrient(a, b, c) {
     // Project first because it does not change the actual values and helps prevent overflows.
-    using dxAB = b.perspectiveDivide().clone().subtract(a.perspectiveDivide());
-    using dxAC = c.perspectiveDivide().clone().subtract(a.perspectiveDivide());
+
+
+    const dxAB = b.perspectiveDivide().cloneScratch().subtract(a.perspectiveDivide());
+    const dxAC = c.perspectiveDivide().cloneScratch().subtract(a.perspectiveDivide());
     return -this.cross2d(dxAB, dxAC);
   }
 }
@@ -387,10 +389,8 @@ const hPointFormatter = {
     // Duck-typing check to ensure compatibility with HPointAbstract instances
     if ( !obj || !(obj instanceof HPoint2dAbstract) ) return null;
 
-    const arr = obj.arr;
     const className = obj.constructor?.name || obj.constructor._hgeomLibType || "HPoint2dAbstract";
     const valuesFormatted = obj._isDormant ? `{ x: NaN, y: NaN }` : `{ x: ${obj.x}, y: ${obj.y} }`;
-    const w = obj._isDormant ? 0 : obj.w;
 
     return [
       'span',
@@ -406,10 +406,11 @@ const hPointFormatter = {
 
   body(obj) {
     const arr = obj.arr;
+    const w = obj._isDormant ? 0 : obj.w;
     return [
       'div',
       { style: 'padding-left: 10px; line-height: 1.5;' },
-      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float32Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float64Array): '], ['object', { object: arr }]],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(w)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],
@@ -421,4 +422,4 @@ const hPointFormatter = {
 
 // Register the formatter globally
 window.devtoolsFormatters ??= [];
-window.devtoolsFormatters.push(hPointFormatter);
+window.devtoolsFormatters.unshift(hPointFormatter);

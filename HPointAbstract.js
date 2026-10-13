@@ -14,7 +14,7 @@ import { mix } from "./utils/mixwith.js";
 
 export class HPointAbstract {
 
-  /** @type {Float32Array} */
+  /** @type {Float64Array} */
   _buffer = null;
 
   /** @type {number} */
@@ -31,7 +31,7 @@ export class HPointAbstract {
   }
 
   _init() {
-    this._buffer = new Float32Array(this.DIMS);
+    this._buffer = new Float64Array(this.DIMS);
   }
 
   // ----- NOTE: Copying and cloning ----- //
@@ -39,11 +39,11 @@ export class HPointAbstract {
   /**
    * A view of the underlying buffer.
    * For consistency with Pooled classes.
-   * @type {Float32Array[this.DIMS]}
+   * @type {Float64Array[this.DIMS]}
    */
   get arr() {
     if ( !~this._offset ) return new Array(this.DIMS);
-    return new Float32Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
+    return new Float64Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
   }
 
   /**
@@ -492,7 +492,7 @@ export class HPointAbstract {
 
   // Cross-multiplies the w, effectively delaying division.
   // Use perspectiveDivide to set w back to 1.
-  // Caution: Can result in buffer overrun for Float32Array values if w gets too high.
+  // Caution: Can result in buffer overrun for Float64Array values if w gets too high.
 
   /**
    * Perspective divide this point to convert it to standard 3D Cartesian point p.
@@ -851,7 +851,7 @@ export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBloc
   clone(out) {
     // If out is not provided, use the same memory type as this object.
     out ||= this._isScratch ? this.constructor.createScratch(this.DIMS) : this.constructor.create(this.DIMS);
-    out._buffer.set()
+    return super.clone(out);
   }
 
   /**
@@ -902,7 +902,7 @@ const hPointFormatter = {
     return [
       'div',
       { style: 'padding-left: 10px; line-height: 1.5;' },
-      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float32Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float64Array): '], ['object', { object: arr }]],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(obj.w)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],

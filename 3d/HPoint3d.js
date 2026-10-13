@@ -13,7 +13,7 @@ export class HPoint3dAbstract extends HPointAbstract {
   /** @type {string} */
   static _hgeomLibType = "HPoint3dAbstract";
 
-  // ----- NOTE: Getters and setters ----- //
+
 
   // Convention: pt.x to access the Cartesian value, pt._x to access the underlying.
   // Vectors return x without any division, to avoid NaN.
@@ -147,7 +147,7 @@ export class HPoint3dAbstract extends HPointAbstract {
   }
 
   static fromJSON(json) {
-    const out = this.constructor.create();
+    const out = this.create();
     out._x = json.x;
     out._y = json.y;
     out._z = json.z;
@@ -288,7 +288,7 @@ export class HPoint3dAbstract extends HPointAbstract {
    */
   static cross(a, b, c, out) {
     out ||= this.create();
-    return this.constructor._cross([a, b, c], out);
+    return this._cross([a, b, c], out);
   }
 
   /**
@@ -328,9 +328,9 @@ export class HPoint3dAbstract extends HPointAbstract {
     // Plane.fromPoints(a, b, c).orient(this).
     // For performance, calculate directly using the scalar triple.
     // Could also take the determinate of the 4 x 4 matrix
-    using vA = a.clone().subtract(this);
-    using vB = b.clone().subtract(this);
-    using vC = c.clone().subtract(this);
+    const vA = a.cloneScratch().subtract(this);
+    const vB = b.cloneScratch().subtract(this);
+    const vC = c.cloneScratch().subtract(this);
     return this.constructor.scalarTripleVectors(vA, vB, vC);
 
     /* To get the determinant:
@@ -349,7 +349,8 @@ export class HPoint3dAbstract extends HPointAbstract {
     b.euclideanNormalization();
     c.euclideanNormalization();
     this.euclideanNormalization();
-    using xABC = this.constructor.cross(a, b, c);
+    const xABC = this.constructor.createScratch();
+    this.constructor.cross(a, b, c, xABC);
     return xABC.dot(this);
   }
 
@@ -380,10 +381,8 @@ const hPointFormatter = {
     // Duck-typing check to ensure compatibility with HPointAbstract instances
     if ( !obj || !(obj instanceof HPoint3dAbstract) ) return null;
 
-    const arr = obj.arr;
     const className = obj.constructor?.name || obj.constructor._hgeomLibType || "HPoint3dAbstract";
     const valuesFormatted = obj._isDormant ? `{ x: NaN, y: NaN, z: NaN }` :`{ x: ${obj.x}, y: ${obj.y}, z: ${obj.z} }`;
-    const w = obj._isDormant ? 0 : obj.w;
 
     return [
       'span',
@@ -399,10 +398,11 @@ const hPointFormatter = {
 
   body(obj) {
     const arr = obj.arr;
+    const w = obj._isDormant ? 0 : obj.w;
     return [
       'div',
       { style: 'padding-left: 10px; line-height: 1.5;' },
-      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float32Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float64Array): '], ['object', { object: arr }]],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(w)],
       ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],
@@ -414,4 +414,4 @@ const hPointFormatter = {
 
 // Register the formatter globally
 window.devtoolsFormatters ??= [];
-window.devtoolsFormatters.push(hPointFormatter);
+window.devtoolsFormatters.unshift(hPointFormatter);
