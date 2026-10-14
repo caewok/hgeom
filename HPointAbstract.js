@@ -52,9 +52,7 @@ export class HPointAbstract {
    * @returns {this}
    */
   set(...args) {
-    const a = this._buffer;
-    const o = this._offset;
-    for ( let i = 0, n = args.length; i < n; i += 1 ) a[o + i] = args[i];
+    this._buffer.set(args, this._offset);
     return this;
   }
 
@@ -65,9 +63,10 @@ export class HPointAbstract {
    */
   clone(out) {
     out ||= this.constructor.create(this.DIMS);
-    const a = this._buffer;
-    const b = out._buffer;
-    for ( let i = 0, n = this.DIMS, o = this._offset, p = out._offset; i < n; i += 1 ) b[p + i] = a[o + i];
+    out._buffer.set(
+      this._buffer.subarray(this._offset, this._offset + this.DIMS),
+      out._offset,
+    );
     return out;
   }
 
@@ -77,9 +76,10 @@ export class HPointAbstract {
    * @returns {this}
    */
   copyFrom(other) {
-    const a = other._buffer;
-    const b = this._buffer;
-    for ( let i = 0, n = other.DIMS, o = other._offset, p = this._offset; i < n; i += 1 ) b[p + i] = a[o + i];
+    this._buffer.set(
+      other._buffer.subarray(other._offset, other._offset + other.DIMS),
+      this._offset,
+    );
     return this;
   }
 
@@ -171,7 +171,7 @@ export class HPointAbstract {
     return this.w === 1 || this.w === 0;
   }
 
-  get isNormalizedSpherical() { return this.magnitudeSquared === 1; }
+  get isNormalizedSpherical() { return this.magnitudeSquared() === 1; }
 
 
   // ----- NOTE: Element-wise math ----- //
@@ -220,6 +220,10 @@ export class HPointAbstract {
     const b = other._buffer;
     for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] += b[other._offset + i];
     return this;
+  }
+
+  _addWithIndex(otherIndex) {
+
   }
 
   /**

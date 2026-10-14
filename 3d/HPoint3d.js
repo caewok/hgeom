@@ -95,20 +95,20 @@ export class HPoint3dAbstract extends HPointAbstract {
    * @param {HPointAbstract} other
    * @returns {this}
    */
-  copyFrom(obj, out) {
+  copyFrom(obj) {
+    if ( obj instanceof HPointAbstract ) return super.copyFrom(obj)
+
     this.w = 1;
-    super.copyFrom(obj, out);
+    if ( Object.hasOwn(obj, "_x") ) this._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) this._x = obj.x;
 
-    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
-    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+    if ( Object.hasOwn(obj, "_y") ) this._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) this._y = obj.y;
 
-    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
-    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+    if ( Object.hasOwn(obj, "_z") ) this._z = obj._z;
+    else if ( Object.hasOwn(obj, "z") ) this._z = obj.z;
 
-    if ( Object.hasOwn(obj, "_z") ) out._z = obj._z;
-    else if ( Object.hasOwn(obj, "z") ) out._z = obj.z;
-
-    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+    if ( Object.hasOwn(obj, "_w") ) this._w = obj._w
     else if ( Object.hasOwn(obj, "w") ) this.w = obj.w;
 
     return this;

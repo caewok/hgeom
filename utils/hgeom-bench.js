@@ -65,8 +65,8 @@ class HPoint3dF64 extends HPoint3d {
 
 class HPoint3dF32 extends HPoint3d {
   static BUFFER_OPTS = { ...HPoint3d.BUFFER_OPTS, arrayClass: Float32Array };
-  static #pool = Pool.getPool(HPoint3dF64, HPoint3dF64.BUFFER_OPTS);
-  static get pool() { return HPoint3dF64.#pool; }
+  static #pool = Pool.getPool(HPoint3dF32, HPoint3dF32.BUFFER_OPTS);
+  static get pool() { return HPoint3dF32.#pool; }
 }
 
 

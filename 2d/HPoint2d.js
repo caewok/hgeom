@@ -82,9 +82,9 @@ export class HPoint2dAbstract extends HPointAbstract {
    * @returns {this}
    */
   copyFrom(obj) {
-    this.w = 1;
-    if ( Object.hasOwn(obj, "_buffer") ) return super.copyFrom(obj);
+    if ( obj instanceof HPointAbstract ) return super.copyFrom(obj)
 
+    this.w = 1;
     if ( Object.hasOwn(obj, "_x") ) this._x = obj._x;
     else if ( Object.hasOwn(obj, "x") ) this._x = obj.x;
 
@@ -154,7 +154,7 @@ export class HPoint2dAbstract extends HPointAbstract {
   }
 
 
-// ----- NOTE: Basic math operations ----- //
+  // ----- NOTE: Basic math operations ----- //
 
   // Could use the parent methods; these are unrolled for speed.
 
