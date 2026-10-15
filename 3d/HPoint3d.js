@@ -5,69 +5,152 @@
 "use strict";
 
 import { HPointAbstract } from "../HPointAbstract.js";
+import { PoolableMixin, BufferManager } from "../utils/Pool.js"
+import { mix } from "../utils/mixwith.js";
 
+export class HPoint3dAbstract extends HPointAbstract {
 
-export class HPoint3d extends HPointAbstract {
-
-  // ----- NOTE: Getters and setters ----- //
+  /** @type {string} */
+  static _hgeomLibType = "HPoint3dAbstract";
 
   // Convention: pt.x to access the Cartesian value, pt._x to access the underlying.
+  // Vectors return x without any division, to avoid NaN.
 
   /** @type {number} */
-  DIMS = 3;
+  get DIMS() { return 4; }
 
-  static get newInstance() { return this.create(); }
+  // ----- NOTE: Static factory methods ----- //
 
   static build(x, y, z = 0, w = 1) { return this.create().set(x, y, z, w); }
 
-  /** @type {number} */
-  get x() { return this.arr[0] / (this.w || 1); }
-
-  get _x() { return this.arr[0]; }
-
-  set x(value) { this.arr[0] = value * (this.w || 1); }
-
-  set _x(value) { this.arr[0] = value; }
-
-  /** @type {number} */
-  get y() { return this.arr[1] / (this.w || 1); }
-
-  get _y() { return this.arr[1];  }
-
-  set y(value) { this.arr[1] = value * (this.w || 1); }
-
-  set _y(value) { this.arr[1] = value; }
-
-  /** @type {number} */
-  get z() { return this.arr[2] / (this.w || 1); }
-
-  get _z() { return this.arr[2]; }
-
-  set z(value) { this.arr[2] = value * (this.w || 1); }
-
-  set _z(value) { this.arr[2] = value; }
+  /**
+   * Create a new point, setting w = 1.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @returns {HPointAbstract}
+   */
+  static buildPoint(x, y, z) { return this.create().set(x, y, z, 1); }
 
   /**
-   * Copy points from a given object.
-   * If the object contains w, will copy directly.
-   * Otherwise will set x and y, setting w to 1.
-   * @param {object}
-   * @returns {HPoint2d}
+   * Create a new point, setting w = 0.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @returns {HPointAbstract}
    */
-  copyFrom(obj, out) {
-    super.copyFrom(obj, out);
+  static buildVector(x, y, z) { return this.create().set(x, y, z, 0); }
 
-    if ( Object.hasOwn(obj, "_x") ) out._x = obj._x;
-    else if ( Object.hasOwn(obj, "x") ) out._x = obj.x;
+  // ----- NOTE: Getters and setters ----- //
 
-    if ( Object.hasOwn(obj, "_y") ) out._y = obj._y;
-    else if ( Object.hasOwn(obj, "y") ) out._y = obj.y;
+  /** @type {number} */
+  get x() { return this._x / (this._w || 1); }
 
-    if ( Object.hasOwn(obj, "_z") ) out._z = obj._z;
-    else if ( Object.hasOwn(obj, "z") ) out._z = obj.z;
+  get _x() { return this._buffer[this._offset]; }
 
-    if ( Object.hasOwn(obj, "_w") ) out._w = obj._w
+  set x(value) { this._x = value * (this.w || 1); }
+
+  set _x(value) { this._buffer[this._offset] = value; }
+
+  /** @type {number} */
+  get y() { return this._y / (this.w || 1); }
+
+  get _y() { return this._buffer[this._offset + 1]; }
+
+  set y(value) { this._y = value * (this.w || 1); }
+
+  set _y(value) { this._buffer[this._offset + 1] = value; }
+
+  /** @type {number} */
+  get z() { return this._z / (this.w || 1); }
+
+  get _z() { return this._buffer[this._offset + 2]; }
+
+  set z(value) { this._z = value * (this.w || 1); }
+
+  set _z(value) { this._buffer[this._offset + 2] = value; }
+
+  /** @type {number} */
+  get w() { return this._buffer[this._offset + 3]; }
+
+  set w(value) { this._buffer[this._offset + 3] = value; }
+
+  get _w() { return this._buffer[this._offset + 3]; }
+
+  set _w(value) { this._buffer[this._offset + 3] = value; }
+
+  // ----- NOTE: Copying and cloning ----- //
+
+  /**
+   * Set all values for this point.
+   * @param {...number}
+   * @returns {this}
+   */
+  set(x, y, z = 0, w = 1) {
+    this._x = x;
+    this._y = y;
+    this._z = z;
+    this._w = w;
+    return this;
   }
+
+  /**
+   * Copy values from another point to this one.
+   * If w is not present, it will be assumed to be 1.
+   * @param {HPointAbstract} other
+   * @returns {this}
+   */
+  copyFrom(obj) {
+    if ( obj._buffer ) {
+      this._x = obj._x;
+      this._y = obj._y;
+      this._z = obj._z;
+      this._w = obj._w;
+      return this;
+    }
+
+    this.w = 1;
+    if ( Object.hasOwn(obj, "_x") ) this._x = obj._x;
+    else if ( Object.hasOwn(obj, "x") ) this._x = obj.x;
+
+    if ( Object.hasOwn(obj, "_y") ) this._y = obj._y;
+    else if ( Object.hasOwn(obj, "y") ) this._y = obj.y;
+
+    if ( Object.hasOwn(obj, "_z") ) this._z = obj._z;
+    else if ( Object.hasOwn(obj, "z") ) this._z = obj.z;
+
+    if ( Object.hasOwn(obj, "_w") ) this._w = obj._w
+    else if ( Object.hasOwn(obj, "w") ) this.w = obj.w;
+
+    return this;
+  }
+
+  /**
+   * Create a new point that contains the same values as this one.
+   * @param {HPointAbstract} [out]            Object in which to store the cloned values
+   * @returns {HPointAbstract} The out object
+   */
+  clone(out) {
+    // If out is not provided, use the same memory type as this object.
+    out ||= this._isScratch ? this.constructor.createScratch() : this.constructor.create();
+    out._x = this._x;
+    out._y = this._y;
+    out._z = this._z;
+    out._w = this._w;
+    return out;
+  }
+
+  /**
+   * Clone a new point from ephemeral scratch memory.
+   * @returns {HPointAbstract}
+   */
+  cloneScratch() { return this.clone(this.constructor.createScratch()); }
+
+  /**
+   * Clone a point from persistent memory.
+   * @returns {HPointAbstract}
+   */
+  clonePersistent() { return this.clone(this.constructor.create()); }
 
 
   toString() { return `x: ${this.x.toFixed(2)}, y: ${this.y.toFixed(2)}, z: ${this.z.toFixed(2)}, w: ${this.w.toFixed(2)}`; }
@@ -81,44 +164,252 @@ export class HPoint3d extends HPointAbstract {
     };
   }
 
+  static fromJSON(json) {
+    const out = this.create();
+    out._x = json.x;
+    out._y = json.y;
+    out._z = json.z;
+    out.w = json.w;
+    return out;
+  }
+
+
+  // ----- NOTE: Basic math operations ----- //
+
+  // Could use the parent methods; these are unrolled for speed.
+
   /**
-   * Generalized cross product of this point with two other 3d homogeous points.
+   * Add another point to this one.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  add(other) {
+    this._buffer[this._offset] += other._buffer[other._offset];
+    this._buffer[this._offset + 1] += other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] += other._buffer[other._offset + 2];
+    this._buffer[this._offset + 3] += other._buffer[other._offset + 3];
+    return this;
+  }
+
+  /**
+   * Subtract another point from this one.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  subtract(other) {
+    this._buffer[this._offset] -= other._buffer[other._offset];
+    this._buffer[this._offset + 1] -= other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] -= other._buffer[other._offset + 2];
+    this._buffer[this._offset + 3] -= other._buffer[other._offset + 3];
+    return this;
+  }
+
+  /**
+   * Multiply this point by another.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  multiply(other) {
+    this._buffer[this._offset] *= other._buffer[other._offset];
+    this._buffer[this._offset + 1] *= other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] *= other._buffer[other._offset + 2];
+    this._buffer[this._offset + 3] *= other._buffer[other._offset + 3];
+    return this;
+  }
+
+  /**
+   * Divide this point by another.
+   * @param {HPoint3d} other
+   * @returns {this}
+   */
+  divide(other) {
+    this._buffer[this._offset] /= other._buffer[other._offset];
+    this._buffer[this._offset + 1] /= other._buffer[other._offset + 1];
+    this._buffer[this._offset + 2] /= other._buffer[other._offset + 2];
+    this._buffer[this._offset + 3] /= other._buffer[other._offset + 3];
+    return this;
+  }
+
+  /**
+   * Multiply this point by a constant.
+   * @param {number} c
+   * @returns {this}
+   */
+  multiplyScalar(c) {
+    this._buffer[this._offset] *= c;
+    this._buffer[this._offset + 1] *= c;
+    this._buffer[this._offset + 2] *= c;
+    this._buffer[this._offset + 3] *= c;
+    return this;
+  }
+
+  /**
+   * Invert this point: 1 / pt.
+   * @returns {this}
+   */
+  invert() {
+    this._buffer[this._offset] = 1 / this._buffer[this._offset];
+    this._buffer[this._offset + 1] = 1 / this._buffer[this._offset + 1];
+    this._buffer[this._offset + 2] = 1 / this._buffer[this._offset + 2];
+    this._buffer[this._offset + 3] = 1 / this._buffer[this._offset + 3];
+    return this;
+  }
+
+
+  // ----- NOTE: Equality ----- //
+
+  /**
+   * Is this point exactly equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    if ( a[this._offset] !== b[this._offset] ) return false;
+    if ( a[this._offset + 1] !== b[this._offset + 1] ) return false;
+    if ( a[this._offset + 2] !== b[this._offset + 2] ) return false;
+    if ( a[this._offset + 3] !== b[this._offset + 3] ) return false;
+    return true;
+  }
+
+  /**
+   * Is this point almost equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @param {number} [epsilon]
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    if ( !a[this._offset].almostEquals(b[this._offset], epsilon) ) return false;
+    if ( !a[this._offset + 1].almostEquals(b[this._offset + 1], epsilon) ) return false;
+    if ( !a[this._offset + 2].almostEquals(b[this._offset + 2], epsilon) ) return false;
+    if ( !a[this._offset + 3].almostEquals(b[this._offset + 3], epsilon) ) return false;
+    return true;
+  }
+
+  // ----- NOTE: Basic evaluators ----- //
+
+  /**
+   * Magnitude squared (length, or sometimes distance) of this vector.
+   * Defined as the dot product of this vector with itself.
+   * Only well-defined for vectors.
+   * @returns {number}
+   */
+  magnitudeSquared() {
+    let out = 0;
+    out += this._buffer[this._offset] ** 2;
+    out += this._buffer[this._offset + 1] ** 2;
+    out += this._buffer[this._offset + 2] ** 2;
+    out += this._buffer[this._offset + 3] ** 2;
+    return out;
+  }
+
+  /**
+   * Dot product of this point with another.
+   * @param {HPointArray} other
+   * @returns {number}
+   */
+  dot(other) {
+    let out = 0;
+    out += this._buffer[this._offset] * other._buffer[other._offset];
+    out += this._buffer[this._offset + 1] * other._buffer[other._offset + 1];
+    out += this._buffer[this._offset + 2] * other._buffer[other._offset + 2];
+    out += this._buffer[this._offset + 3] * other._buffer[other._offset + 3];
+    return out;
+  }
+
+  // Use parent for other math methods for now.
+
+  /**
+   * Interpolate between this geometry and another by a parameter t.
+   * @param {HPointAbstract} other      The other point along the line
+   * @param {number} t                  Value, typically between 0 and 1
+   * @returns {this}
+   */
+  lerpProject(other, t) {
+    const w1 = this.w;
+    const w2 = other.w;
+    const invT = 1 - t;
+
+    // Linearly interpolate the weights.
+    const wT = (w1 * invT) + (w2 * t);
+
+    // Rational interpolation for the coordinates.
+    const a = this._buffer;
+    const b = other._buffer;
+    a[this._offset + 0] = ((a[this._offset + 0] * w1 * invT) + (b[other._offset + 0] * w2 * t)) / wT;
+    a[this._offset + 1] = ((a[this._offset + 1] * w1 * invT) + (b[other._offset + 1] * w2 * t)) / wT;
+    a[this._offset + 2] = ((a[this._offset + 2] * w1 * invT) + (b[other._offset + 2] * w2 * t)) / wT;
+    this.w = 1; // The result is normalized.
+    return this;
+  }
+
+
+  // ----- NOTE: Matrix transform ----- //
+
+  /**
+   * Multiply this point by a row-major matrix.
+   * @param {Matrix<4x4>} M
+   * @returns {this}
+   */
+  transform(M) {
+    // Cache current values to prevent overwrite during calculation.
+    const { _x, _y, _z, _w } = this;
+
+    const o = M._offset;
+    const m = M._buffer;
+    this._buffer[this._offset] = m[o + 0] * _x + m[o + 1] * _y + m[o + 2] * _z + m[o + 3] * _w;
+    this._buffer[this._offset + 1] = m[o + 4] * _x + m[o + 5] * _y + m[o + 6] * _z + m[o + 7] * _w;
+    this._buffer[this._offset + 2] = m[o + 8] * _x + m[o + 9] * _y + m[o + 10] * _z + m[o + 11] * _w;
+    this._buffer[this._offset + 3] = m[o + 12] * _x + m[o + 13] * _y + m[o + 14] * _z + m[o + 15] * _w;
+
+    return this;
+  }
+
+  /**
+   * Generalized cross product of three 3d homogeous points.
    * @param {HPoint3d} a
    * @param {HPoint3d} b
+   * @param {HPoint3d} c
    * @param {HPoint3d} [out]
    * @returns {HPoint3d}
    */
-  cross(a, b, out) {
-    out ||= this.constructor.newInstance;
-    return this.constructor._cross([a, b, this], out);
+  static cross(a, b, c, out) {
+    out ||= this.create();
+    return this._cross([a, b, c], out);
   }
 
   /**
    * Cross two 3d vectors by ignoring the w value.
    */
   static crossVectors(p0, p1, out) {
-    out ||= this.newInstance;
-    out.w = 0;
+    out ||= this.create();
+
     // Avoid overwriting if out point is this or other.
     const x = this.cross2d(p0, p1, 1, 2);
     const y = this.cross2d(p0, p1, 2, 0);
     const z = this.cross2d(p0, p1, 0, 1);
-    out.arr[0] = x;
-    out.arr[1] = y;
-    out.arr[2] = z;
+    out._x = x;
+    out._y = y;
+    out._z = z;
+    out.w = 0;
     return out;
   }
 
-  static scalarTripleVectors(a, b, c) {
-    using xBC = this.crossVectors(b, c);
-    return a.dot(xBC);
-  }
 
-  /*
-  Orientation of a point in relation to three points that form a plane.
-  • C > 0: Point d is above the plane (right-hand rule for a -> b -> c)
-  • C < 0: Point d is below the palne
-  • C = 0: Coplanar
+  /**
+  * Orientation of a point in relation to three points that form a plane.
+  * • C > 0: Point d is above the plane (right-hand rule for a -> b -> c)
+  * • C < 0: Point d is below the palne
+  * • C = 0: Coplanar
   *
   * @param {HPoint3d} a         Point or vector, depending on whether this is a vector
   * @param {HPoint3d} b         Point or vector, depending on whether this is a vector
@@ -126,116 +417,108 @@ export class HPoint3d extends HPointAbstract {
   * @returns {number}
   */
   orient(a, b, c) {
-    // Y is reversed so must negate.
-    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
+    const t = this._buffer, to = this._offset;
+    const B = b._buffer, bo = b._offset;
 
-    // Could create a plane:
-    // Plane.fromPoints(a, b, c).orient(this).
-    // For performance, calculate directly using the scalar triple.
-    // Could also take the determinate of the 4 x 4 matrix
-    using vA = a.subtract(this);
-    using vB = b.subtract(this);
-    using vC = c.subtract(this);
-    return this.constructor.scalarTripleVectors(vA, vB, vC);
+    // Vector case: a • (b × this)
+    if ( t[to + 3] === 0 ) {
+      const A = a._buffer, ao = a._offset;
+      const ax = A[ao],     ay = A[ao + 1], az = A[ao + 2];
+      const bx = B[bo],     by = B[bo + 1], bz = B[bo + 2];
+      const cx = t[to],     cy = t[to + 1], cz = t[to + 2];
+      return ax * (by * cz - bz * cy)
+           - ay * (bx * cz - bz * cx)
+           + az * (bx * cy - by * cx);
+    }
 
-    /* To get the determinant:
-    using xABC = a.cross(b, c);
-    return -xABC.dot(this);
-    */
+    // Point case: det[a - p, b - p, c - p], the same as scalarTriple(vA, vB, vC).
+    const px = t[to], py = t[to + 1], pz = t[to + 2];
+    const A = a._buffer, ao = a._offset;
+    const C = c._buffer, co = c._offset;
+
+    const ax = A[ao]     - px, ay = A[ao + 1] - py, az = A[ao + 2] - pz;
+    const bx = B[bo]     - px, by = B[bo + 1] - py, bz = B[bo + 2] - pz;
+    const cx = C[co]     - px, cy = C[co + 1] - py, cz = C[co + 2] - pz;
+
+    return ax * (by * cz - bz * cy)
+         - ay * (bx * cz - bz * cx)
+         + az * (bx * cy - by * cx);
   }
 
   /**
    * Orient using the determinant for testing.
    */
   orientWithDet(a, b, c) {
-    if ( this.isVector ) return this.constructor.scalarTripleVectors(a, b, this);
-    
+    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
+
     a.euclideanNormalization();
     b.euclideanNormalization();
     c.euclideanNormalization();
     this.euclideanNormalization();
-    using xABC = a.cross(b, c);
+    const xABC = this.constructor.createScratch();
+    this.constructor.cross(a, b, c, xABC);
     return xABC.dot(this);
   }
 
-
-  /**
-   * Transform a point by a 4x4 matrix.
-   * @param {Matrix<4x4} M
-   * @param {HPoint3d} out
-   * @returns {HPoint3d}
-   */
-  transform(M, out) {
-    out ||= this.constructor.newInstance;
-    const a = M.arr;
-    const b = this.arr;
-
-    const a00 = a[0];
-    const a01 = a[1];
-    const a02 = a[2];
-    const a03 = a[3];
-
-    const a10 = a[4];
-    const a11 = a[5];
-    const a12 = a[6];
-    const a13 = a[7];
-
-    const a20 = a[8];
-    const a21 = a[9];
-    const a22 = a[10];
-    const a23 = a[11];
-
-    const a30 = a[12];
-    const a31 = a[13];
-    const a32 = a[14];
-    const a33 = a[15];
-
-    const b00 = b[0];
-    const b01 = b[1];
-    const b02 = b[2];
-    const b03 = b[3];
-
-    const o = out.arr;
-    o[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
-    o[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
-    o[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
-    o[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
-
-    return out;
-  }
 }
 
-/*
-if (window.devtoolsFormatters === undefined) {
-  window.devtoolsFormatters = [];
+// ----- NOTE: HPoint3d ----- //
+export class HPoint3d extends mix(HPoint3dAbstract).with(PoolableMixin) {
+
+  /** @type {string} */
+  static _hgeomLibType = "HPoint3d";
+
+  /** @type {object} */
+  static BUFFER_OPTS = {
+    maxScratch: 1e05,               /** @type {number} */
+    maxPersistent: 1e04,            /** @type {number} */
+    stride: 4,                      /** @type {number} */
+    bufferClass: BufferManager,     /** @type {class} */
+  };
+
+  static #cachedPool;
+
+  static get pool() { return HPoint3d.#cachedPool ??= super.pool; }
 }
 
-window.devtoolsFormatters.push({
-  header: function(obj) {
-    if (!(obj instanceof HPoint2d)) return null;
-    if ( !Object.hasOwn(obj, "arr") ) return null; // For incomplete prototypes, like displaying HPoint2d class.
-    return ["div", {},
-      ["span", {style: "color: #881391; font-weight: bold;"}, "HPoint2d "],
-      ["span", {style: "color: #1a1aa6;"}, `x: ${obj.x}`],
-      ["span", {}, ", "],
-      ["span", {style: "color: #1a1aa6;"}, `y: ${obj.y}`],
-      ["span", {}, ", "],
-      ["span", {style: "color: #1a1aa6;"}, `w: ${obj.w}`]
+// ----- NOTE: DevTools formatter ----- //
+
+const hPointFormatter = {
+  header(obj) {
+    // Duck-typing check to ensure compatibility with HPointAbstract instances
+    if ( !obj || !(obj instanceof HPoint3dAbstract) ) return null;
+
+    const className = obj.constructor?.name || obj.constructor._hgeomLibType || "HPoint3dAbstract";
+    const valuesFormatted = obj._isDormant ? `{ x: NaN, y: NaN, z: NaN }` :`{ x: ${obj.x}, y: ${obj.y}, z: ${obj.z} }`;
+
+    return [
+      'span',
+      {},
+      ['span', { style: 'color: #af00db; font-weight: bold;' }, className],
+      ['span', { style: 'color: #007000;' }, `[${valuesFormatted}]`]
     ];
   },
-  hasBody: function() { return true; },
 
-  body: function(obj) {
-    const arrayString = obj.arr ? obj.arr.join(", ") : "null";
-    const pooledStatus = String(obj._isInPool);
-    return ["div", {style: "margin-left: 20px;"},
-      ["div", {}, `_x: ${obj._x}, _y: ${obj._y}`],
-      ["div", {}, `Raw Array: [${arrayString}]`],
-      ["div", {}, `Pooled: ${pooledStatus}`],
-      ["div", {}, ["object", { "object": obj }],
-      ], // The entire object.
+  hasBody(_obj) {
+    return true;
+  },
 
+  body(obj) {
+    const arr = obj.arr;
+    const w = obj._isDormant ? 0 : obj.w;
+    return [
+      'div',
+      { style: 'padding-left: 10px; line-height: 1.5;' },
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'arr (Float64Array): '], ['object', { object: arr }]],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'DIMS: '], String(obj.DIMS)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'w: '], String(w)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, 'isVector: '], String(obj.isVector)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, '_offset: '], String(obj._offset)],
+      ['div', {}, ['span', { style: 'font-weight: bold; color: #333;' }, '_isScratch: '], String(obj._isScratch ?? false)]
     ];
   }
-});
-*/
+};
+
+// Register the formatter globally
+window.devtoolsFormatters ??= [];
+window.devtoolsFormatters.unshift(hPointFormatter);
