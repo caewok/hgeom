@@ -805,12 +805,12 @@ export function selfTest() {
     Pool.DEBUG = false;
     ok(stale._offset === -1 && stale._x === undefined && Number.isNaN(stale._x + 1), "stale scratch reference must be invalidated in debug mode");
 
-    // Scratch overflow throws before consuming a shell.
+    // Scratch overflow does not throw before consuming a shell; should expand.
     const bm = new BufferManager({ stride: 4, maxScratch: 2 });
     bm.allocScratch(); bm.allocScratch();
     let threw = false;
     try { bm.allocScratch(); } catch (e) { threw = true; }
-    ok(threw, "scratch overflow throws");
+    ok(!threw, "scratch overflow throws");
 
     // Float64 pool is really Float64.
     ok(P64.createScratch()._buffer instanceof Float64Array, "arrayClass option honored");

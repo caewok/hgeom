@@ -13,15 +13,11 @@ export class HPoint3dAbstract extends HPointAbstract {
   /** @type {string} */
   static _hgeomLibType = "HPoint3dAbstract";
 
-
-
   // Convention: pt.x to access the Cartesian value, pt._x to access the underlying.
   // Vectors return x without any division, to avoid NaN.
 
   /** @type {number} */
-  DIMS = 4;
-
-  constructor() { super(4); }
+  get DIMS() { return 4; }
 
   // ----- NOTE: Static factory methods ----- //
 
@@ -74,6 +70,15 @@ export class HPoint3dAbstract extends HPointAbstract {
 
   set _z(value) { this._buffer[this._offset + 2] = value; }
 
+  /** @type {number} */
+  get w() { return this._buffer[this._offset + 3]; }
+
+  set w(value) { this._buffer[this._offset + 3] = value; }
+
+  get _w() { return this._buffer[this._offset + 3]; }
+
+  set _w(value) { this._buffer[this._offset + 3] = value; }
+
   // ----- NOTE: Copying and cloning ----- //
 
   /**
@@ -96,7 +101,13 @@ export class HPoint3dAbstract extends HPointAbstract {
    * @returns {this}
    */
   copyFrom(obj) {
-    if ( obj instanceof HPointAbstract ) return super.copyFrom(obj)
+    if ( obj._buffer ) {
+      this._x = obj._x;
+      this._y = obj._y;
+      this._z = obj._z;
+      this._w = obj._w;
+      return this;
+    }
 
     this.w = 1;
     if ( Object.hasOwn(obj, "_x") ) this._x = obj._x;
@@ -122,7 +133,11 @@ export class HPoint3dAbstract extends HPointAbstract {
   clone(out) {
     // If out is not provided, use the same memory type as this object.
     out ||= this._isScratch ? this.constructor.createScratch() : this.constructor.create();
-    return super.clone(out);
+    out._x = this._x;
+    out._y = this._y;
+    out._z = this._z;
+    out._w = this._w;
+    return out;
   }
 
   /**
@@ -229,6 +244,60 @@ export class HPoint3dAbstract extends HPointAbstract {
   }
 
   /**
+   * Invert this point: 1 / pt.
+   * @returns {this}
+   */
+  invert() {
+    this._buffer[this._offset] = 1 / this._buffer[this._offset];
+    this._buffer[this._offset + 1] = 1 / this._buffer[this._offset + 1];
+    this._buffer[this._offset + 2] = 1 / this._buffer[this._offset + 2];
+    this._buffer[this._offset + 3] = 1 / this._buffer[this._offset + 3];
+    return this;
+  }
+
+
+  // ----- NOTE: Equality ----- //
+
+  /**
+   * Is this point exactly equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    if ( a[this._offset] !== b[this._offset] ) return false;
+    if ( a[this._offset + 1] !== b[this._offset + 1] ) return false;
+    if ( a[this._offset + 2] !== b[this._offset + 2] ) return false;
+    if ( a[this._offset + 3] !== b[this._offset + 3] ) return false;
+    return true;
+  }
+
+  /**
+   * Is this point almost equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @param {number} [epsilon]
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    if ( !a[this._offset].almostEquals(b[this._offset], epsilon) ) return false;
+    if ( !a[this._offset + 1].almostEquals(b[this._offset + 1], epsilon) ) return false;
+    if ( !a[this._offset + 2].almostEquals(b[this._offset + 2], epsilon) ) return false;
+    if ( !a[this._offset + 3].almostEquals(b[this._offset + 3], epsilon) ) return false;
+    return true;
+  }
+
+  // ----- NOTE: Basic evaluators ----- //
+
+  /**
    * Magnitude squared (length, or sometimes distance) of this vector.
    * Defined as the dot product of this vector with itself.
    * Only well-defined for vectors.
@@ -259,6 +328,30 @@ export class HPoint3dAbstract extends HPointAbstract {
 
   // Use parent for other math methods for now.
 
+  /**
+   * Interpolate between this geometry and another by a parameter t.
+   * @param {HPointAbstract} other      The other point along the line
+   * @param {number} t                  Value, typically between 0 and 1
+   * @returns {this}
+   */
+  lerpProject(other, t) {
+    const w1 = this.w;
+    const w2 = other.w;
+    const invT = 1 - t;
+
+    // Linearly interpolate the weights.
+    const wT = (w1 * invT) + (w2 * t);
+
+    // Rational interpolation for the coordinates.
+    const a = this._buffer;
+    const b = other._buffer;
+    a[this._offset + 0] = ((a[this._offset + 0] * w1 * invT) + (b[other._offset + 0] * w2 * t)) / wT;
+    a[this._offset + 1] = ((a[this._offset + 1] * w1 * invT) + (b[other._offset + 1] * w2 * t)) / wT;
+    a[this._offset + 2] = ((a[this._offset + 2] * w1 * invT) + (b[other._offset + 2] * w2 * t)) / wT;
+    this.w = 1; // The result is normalized.
+    return this;
+  }
+
 
   // ----- NOTE: Matrix transform ----- //
 
@@ -269,14 +362,14 @@ export class HPoint3dAbstract extends HPointAbstract {
    */
   transform(M) {
     // Cache current values to prevent overwrite during calculation.
-    const { _x, _y, _z, w } = this;
+    const { _x, _y, _z, _w } = this;
 
     const o = M._offset;
     const m = M._buffer;
-    this._buffer[this._offset] = m[o + 0] * _x + m[o + 1] * _y + m[o + 2] * _z + m[o + 3] * w;
-    this._buffer[this._offset + 1] = m[o + 4] * _x + m[o + 5] * _y + m[o + 6] * _z + m[o + 7] * w;
-    this._buffer[this._offset + 2] = m[o + 8] * _x + m[o + 9] * _y + m[o + 10] * _z + m[o + 11] * w;
-    this._buffer[this._offset + 3] = m[o + 12] * _x + m[o + 13] * _y + m[o + 14] * _z + m[o + 15] * w;
+    this._buffer[this._offset] = m[o + 0] * _x + m[o + 1] * _y + m[o + 2] * _z + m[o + 3] * _w;
+    this._buffer[this._offset + 1] = m[o + 4] * _x + m[o + 5] * _y + m[o + 6] * _z + m[o + 7] * _w;
+    this._buffer[this._offset + 2] = m[o + 8] * _x + m[o + 9] * _y + m[o + 10] * _z + m[o + 11] * _w;
+    this._buffer[this._offset + 3] = m[o + 12] * _x + m[o + 13] * _y + m[o + 14] * _z + m[o + 15] * _w;
 
     return this;
   }
@@ -324,22 +417,32 @@ export class HPoint3dAbstract extends HPointAbstract {
   * @returns {number}
   */
   orient(a, b, c) {
-    // Y is reversed so must negate.
-    if ( this.isVector ) return this.constructor.scalarTriple(a, b, this);
+    const t = this._buffer, to = this._offset;
+    const B = b._buffer, bo = b._offset;
 
-    // Could create a plane:
-    // Plane.fromPoints(a, b, c).orient(this).
-    // For performance, calculate directly using the scalar triple.
-    // Could also take the determinate of the 4 x 4 matrix
-    const vA = a.cloneScratch().subtract(this);
-    const vB = b.cloneScratch().subtract(this);
-    const vC = c.cloneScratch().subtract(this);
-    return this.constructor.scalarTriple(vA, vB, vC);
+    // Vector case: a • (b × this)
+    if ( t[to + 3] === 0 ) {
+      const A = a._buffer, ao = a._offset;
+      const ax = A[ao],     ay = A[ao + 1], az = A[ao + 2];
+      const bx = B[bo],     by = B[bo + 1], bz = B[bo + 2];
+      const cx = t[to],     cy = t[to + 1], cz = t[to + 2];
+      return ax * (by * cz - bz * cy)
+           - ay * (bx * cz - bz * cx)
+           + az * (bx * cy - by * cx);
+    }
 
-    /* To get the determinant:
-    using xABC = a.cross(b, c);
-    return -xABC.dot(this);
-    */
+    // Point case: det[a - p, b - p, c - p], the same as scalarTriple(vA, vB, vC).
+    const px = t[to], py = t[to + 1], pz = t[to + 2];
+    const A = a._buffer, ao = a._offset;
+    const C = c._buffer, co = c._offset;
+
+    const ax = A[ao]     - px, ay = A[ao + 1] - py, az = A[ao + 2] - pz;
+    const bx = B[bo]     - px, by = B[bo + 1] - py, bz = B[bo + 2] - pz;
+    const cx = C[co]     - px, cy = C[co + 1] - py, cz = C[co + 2] - pz;
+
+    return ax * (by * cz - bz * cy)
+         - ay * (bx * cz - bz * cx)
+         + az * (bx * cy - by * cx);
   }
 
   /**
@@ -359,6 +462,7 @@ export class HPoint3dAbstract extends HPointAbstract {
 
 }
 
+// ----- NOTE: HPoint3d ----- //
 export class HPoint3d extends mix(HPoint3dAbstract).with(PoolableMixin) {
 
   /** @type {string} */

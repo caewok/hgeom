@@ -14,9 +14,7 @@ export class HPoint2dAbstract extends HPointAbstract {
   /** @type {string} */
   static _hgeomLibType = "HPoint2dAbstract";
 
-  DIMS = 3;
-
-  constructor() { super(3); }
+  get DIMS() { return 3; }
 
   // ----- NOTE: Static creation ----- //
 
@@ -61,6 +59,14 @@ export class HPoint2dAbstract extends HPointAbstract {
 
   set _y(value) { this._buffer[this._offset + 1] = value; }
 
+  get w() { return this._buffer[this._offset + 2]; }
+
+  set w(value) { this._buffer[this._offset + 2] = value; }
+
+  get _w() { return this._buffer[this._offset + 2]; }
+
+  set _w(value) { this._buffer[this._offset + 2] = value; }
+
   // ----- NOTE: Copying ----- //
 
   /**
@@ -82,7 +88,12 @@ export class HPoint2dAbstract extends HPointAbstract {
    * @returns {this}
    */
   copyFrom(obj) {
-    if ( obj instanceof HPointAbstract ) return super.copyFrom(obj)
+    if ( obj._buffer ) {
+      this._x = obj._x;
+      this._y = obj._y;
+      this._w = obj._w;
+      return this;
+    }
 
     this.w = 1;
     if ( Object.hasOwn(obj, "_x") ) this._x = obj._x;
@@ -105,7 +116,10 @@ export class HPoint2dAbstract extends HPointAbstract {
   clone(out) {
     // If out is not provided, use the same memory type as this object.
     out ||= this._isScratch ? this.constructor.createScratch() : this.constructor.create();
-    return super.clone(out);
+    out._x = this._x;
+    out._y = this._y;
+    out._w = this._w;
+    return out;
   }
 
   /**
@@ -219,6 +233,80 @@ export class HPoint2dAbstract extends HPointAbstract {
   }
 
   /**
+   * Invert this point: 1 / pt.
+   * @returns {this}
+   */
+  invert() {
+    this._buffer[this._offset] = 1 / this._buffer[this._offset];
+    this._buffer[this._offset + 1] = 1 / this._buffer[this._offset + 1];
+    this._buffer[this._offset + 2] = 1 / this._buffer[this._offset + 2];
+    return this;
+  }
+
+
+  /**
+   * Interpolate between this geometry and another by a parameter t.
+   * @param {HPointAbstract} other      The other point along the line
+   * @param {number} t                  Value, typically between 0 and 1
+   * @returns {this}
+   */
+  lerpProject(other, t) {
+    const w1 = this.w;
+    const w2 = other.w;
+    const invT = 1 - t;
+
+    // Linearly interpolate the weights.
+    const wT = (w1 * invT) + (w2 * t);
+
+    // Rational interpolation for the coordinates.
+    const a = this._buffer;
+    const b = other._buffer;
+    a[this._offset + 0] = ((a[this._offset + 0] * w1 * invT) + (b[other._offset + 0] * w2 * t)) / wT;
+    a[this._offset + 1] = ((a[this._offset + 1] * w1 * invT) + (b[other._offset + 1] * w2 * t)) / wT;
+    this.w = 1; // The result is normalized.
+    return this;
+  }
+
+  // ----- NOTE: Equality ----- //
+
+  /**
+   * Is this point exactly equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @returns {boolean}
+   */
+  equals(other) {
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    if ( a[this._offset] !== b[this._offset] ) return false;
+    if ( a[this._offset + 1] !== b[this._offset + 1] ) return false;
+    if ( a[this._offset + 2] !== b[this._offset + 2] ) return false;
+    return true;
+  }
+
+  /**
+   * Is this point almost equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @param {number} [epsilon]
+   * @returns {boolean}
+   */
+  almostEquals(other, epsilon) {
+    if ( this.DIMS !== other.DIMS ) return false;
+    const a = this._buffer;
+    const b = other._buffer;
+    if ( !a[this._offset].almostEquals(b[this._offset], epsilon) ) return false;
+    if ( !a[this._offset + 1].almostEquals(b[this._offset + 1], epsilon) ) return false;
+    if ( !a[this._offset + 2].almostEquals(b[this._offset + 2], epsilon) ) return false;
+    return true;
+  }
+
+  // ----- NOTE: Basic evaluators ----- //
+
+  /**
    * Magnitude squared (length, or sometimes distance) of this vector.
    * Defined as the dot product of this vector with itself.
    * Only well-defined for vectors.
@@ -257,13 +345,13 @@ export class HPoint2dAbstract extends HPointAbstract {
    */
   transform(M) {
     // Cache current values to prevent overwrite during calculation.
-    const { _x, _y, w } = this;
+    const { _x, _y, _w } = this;
 
     const o = M._offset;
     const m = M._buffer;
-    this._buffer[this._offset] = m[o + 0] * _x + m[o + 1] * _y + m[o + 2] * w;
-    this._buffer[this._offset + 1] = m[o + 3] * _x + m[o + 4] * _y + m[o + 5] * w;
-    this._buffer[this._offset + 2] = m[o + 6] * _x + m[o + 7] * _y + m[o + 8] * w;
+    this._buffer[this._offset] = m[o + 0] * _x + m[o + 1] * _y + m[o + 2] * _w;
+    this._buffer[this._offset + 1] = m[o + 3] * _x + m[o + 4] * _y + m[o + 5] * _w;
+    this._buffer[this._offset + 2] = m[o + 6] * _x + m[o + 7] * _y + m[o + 8] * _w;
 
     return this;
   }
@@ -328,6 +416,7 @@ export class HPoint2dAbstract extends HPointAbstract {
   }
 }
 
+// ----- NOTE: HPoint2d ----- //
 export class HPoint2d extends mix(HPoint2dAbstract).with(PoolableMixin) {
   /** @type {string} */
   static _hgeomLibType = "HPoint2d";

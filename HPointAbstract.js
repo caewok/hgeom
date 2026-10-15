@@ -8,79 +8,29 @@ import { PoolableMixin, VariableBlockPoolableMixin } from "./utils/Pool.js";
 import { mix } from "./utils/mixwith.js";
 
 /**
- * Abstract class that represents homogenous points of various dimensions.
- * All have a DIMS property that controls the number of axes and offset of w component.
+ * Abstract class that holds a typed array buffer as a backing for values.
+ * Used for points and matrices.
+ * Can be used by pooling.
  */
+export class ArrayBackedAbstract {
 
-export class HPointAbstract {
-
-  /** @type {Float32Array} */
+  /** @type {TypedArray} */
   _buffer = null;
 
   /** @type {number} */
   _offset = 0;
 
   /** @type {number} */
-  DIMS = 4; // Number of dimensions, counting w.
+  #DIMS = 4;
+
+  get DIMS() { return this.#DIMS; }
 
   /**
-   * @param {number} dims       Dimensions, counting w.
+   * @param {number} dims       Total number of dimensions (length of the data in the buffer)
    */
-  constructor(dims = 4) {
-    this.DIMS = dims;
-  }
-
-  _init() {
-    this._buffer = new Float32Array(this.DIMS);
-  }
-
-  // ----- NOTE: Copying and cloning ----- //
-
-  /**
-   * A view of the underlying buffer.
-   * For consistency with Pooled classes.
-   * @type {Float32Array[this.DIMS]}
-   */
-  get arr() {
-    if ( !~this._offset ) return new Array(this.DIMS);
-    return new Float32Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
-  }
-
-  /**
-   * Set all values for this point.
-   * @param {...number}
-   * @returns {this}
-   */
-  set(...args) {
-    this._buffer.set(args, this._offset);
-    return this;
-  }
-
-  /**
-   * Create a new point that contains the same values as this one.
-   * @param {HPointAbstract} [out]            Object in which to store the cloned values
-   * @returns {HPointAbstract} The out object
-   */
-  clone(out) {
-    out ||= this.constructor.create(this.DIMS);
-    out._buffer.set(
-      this._buffer.subarray(this._offset, this._offset + this.DIMS),
-      out._offset,
-    );
-    return out;
-  }
-
-  /**
-   * Copy values from another point to this one.
-   * @param {HPointAbstract} other
-   * @returns {this}
-   */
-  copyFrom(other) {
-    this._buffer.set(
-      other._buffer.subarray(other._offset, other._offset + other.DIMS),
-      this._offset,
-    );
-    return this;
+  _init(dims = 4, buffer) {
+    this.#DIMS = dims;
+    this._buffer = buffer || new Float64Array(dims);
   }
 
   // ----- NOTE: Instance check ----- //
@@ -102,8 +52,62 @@ export class HPointAbstract {
     return false;
   }
 
-  /** @type {string} */
-  static _hgeomLibType = "HPointAbstract";
+  static get _hgeomLibType() { return this.name; }
+
+  // ----- NOTE: Copying and cloning ----- //
+
+  /**
+   * A view of the underlying buffer.
+   * For consistency with Pooled classes.
+   * @type {Float32Array[this.DIMS]}
+   */
+  get arr() {
+    if ( !~this._offset ) return new Array(this.DIMS);
+    return new Float32Array(this._buffer.buffer, this._offset * this._buffer.BYTES_PER_ELEMENT, this.DIMS);
+  }
+
+  /**
+   * Set all values for this point.
+   * @param {...number}
+   * @returns {this}
+   */
+  set(...args) {
+    // For array sizes <= 16, the for loop is better than or equal to
+    // `this._buffer.set(args, this._offset);`
+    const a = this._buffer;
+    const o = this._offset;
+    for ( let i = 0, n = args.length; i < n; i++ ) a[o + i] = args[i];
+    return this;
+  }
+
+  /**
+   * Create a new point that contains the same values as this one.
+   * @param {HPointAbstract} [out]            Object in which to store the cloned values
+   * @returns {HPointAbstract} The out object
+   */
+  clone(out) {
+    out ||= this.constructor.create(this.DIMS);
+    const a = this._buffer;
+    const b = out._buffer;
+    const o = this._offset;
+    const p = out._offset;
+    for ( let i = 0, n = this.DIMS; i < n; i++ ) b[p + i] = a[o + i];
+    return out;
+  }
+
+  /**
+   * Copy values from another point to this one.
+   * @param {HPointAbstract} other
+   * @returns {this}
+   */
+  copyFrom(other) {
+    const a = this._buffer;
+    const b = other._buffer;
+    const o = this._offset;
+    const p = other._offset;
+    for ( let i = 0, n = this.DIMS; i < n; i++ ) a[o + i] = b[p + i];
+    return this;
+  }
 
   // ----- NOTE: Static creation ----- //
 
@@ -113,8 +117,8 @@ export class HPointAbstract {
    * @returns {HPointAbstract}
    */
   static create(nDims = 4) {
-    const out = new this(nDims);
-    out._init();
+    const out = new this();
+    out._init(nDims);
     return out;
   }
 
@@ -126,53 +130,107 @@ export class HPointAbstract {
   static build(...args) { return this.create(args.length).set(...args); }
 
   /**
-   * Create a new point with zero values but for the 1 at the end.
-   * @param {number} nDims            Number of dimensions
-   * @param {HPointAbstract} [out]        Where to store the result
+   * Transform a 1 x DIMS matrix to a point. Only uses the first column.
+   * Transformed in place.
+   * @param {HPointAbstract} p
+   * @returns {MatrixAbstract}
+   */
+  static fromMatrix(m) {
+    Object.assign(this, m);
+    return m;
+  }
+
+  // ----- NOTE: Basic fills ----- //
+
+  /**
+   * Zero the values
    * @returns {HPointAbstract}
    */
-  static zeroPoint(nDims = 4, out) {
-    out ||= this.create(nDims);
-    out._buffer.fill(0, out._offset, out.DIMS);
-    out._buffer[out._offset + out.DIMS - 1] = 1;
-    return out;
+  zero() {
+    this._buffer.fill(0, this._offset, this.DIMS);
+    return this;
   }
 
   /**
-   * Create a new point with zero values.
-   * @param {number} nDims            Number of dimensions
-   * @param {HPointAbstract} [out]        Where to store the result
+   * Set every value to 1
    * @returns {HPointAbstract}
    */
-  static zeroVector(nDims = 4, out) {
-    out ||= this.create(nDims);
-    out._buffer.fill(0, out._offset, out.DIMS);
-    return out;
+  ones() {
+    this._buffer.fill(1, this._offset, this.DIMS);
+    return this;
   }
 
-  // ----- NOTE: W property ----- //
-
-  // Child classes may defined additional property getters, like x, y, z.
-  // Convention places w at the last value.
-  // Convention is for get x to return arr[0]/w. While get _x will return arr[0].
-
-  get w() { return this._buffer[this._offset + this.DIMS - 1]; }
-
-  set w(value) { this._buffer[this._offset + this.DIMS - 1] = value; }
-
-  // For parallel with _x, _y, ...
-  get _w() { return this._buffer[this._offset + this.DIMS - 1]; }
-
-  set _w(value) { this._buffer[this._offset + this.DIMS - 1] = value; }
-
-  get isVector() { return this.w === 0; }
-
-  get isNormalizedEuclidean() {
-    return this.w === 1 || this.w === 0;
+  /**
+   * Set to random values between [min, max)
+   * @param {number} min
+   * @param {number} max
+   * @returns {HPointAbstract}
+   */
+  random(min = 0, max = 1) {
+    const a = this._buffer;
+    const scale = (max - min) + min;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[i] = Math.random() * scale;
+    }
+    return this;
   }
 
-  get isNormalizedSpherical() { return this.magnitudeSquared() === 1; }
+  /**
+   * Test if values are finite.
+   * @returns {boolean}
+   */
+  isFinite() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      if ( !Number.isFinite(a[i]) ) return false;
+    }
+    return true;
+  }
 
+  /**
+   * Force values to be finite. Any values above/below max/min will be ceiling/floored.
+   * @param {number} min = -1e06      Value for negative ∞
+   * @param {number} max = 1e06       Value for positive ∞
+   * @returns {this}
+   */
+  makeFinite(min = -1e06, max = 1e06) {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[i] = Math.min(a[i], max);
+      a[i] = Math.max(a[i], min);
+    }
+    return this;
+  }
+
+  /**
+   * Force values very close to an integer to that integer. Otherwise number is not touched.
+   * @param {number} [epsilon=1e-08]
+   * @returns {this}
+   */
+  snapToInteger(epsilon = 1e-08) {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[i] = snapToInteger(a[i], epsilon);
+    return this;
+  }
+
+  // ----- NOTE: Iterators ----- //
+
+  /**
+   * Iterate over each element of the matrix.
+   * Iterate by column, then by row
+   */
+  [Symbol.iterator]() {
+    let index = this._offset;
+    const dat = this._buffer;
+    const ln = this.DIMS + this._offset;
+    return {
+      next() {
+        if ( index < ln ) {
+          return { value: dat[index++], done: false };
+        } else return { done: true };
+      }
+    };
+  }
 
   // ----- NOTE: Element-wise math ----- //
 
@@ -186,26 +244,8 @@ export class HPointAbstract {
    */
   applyElementWise(callback) {
     const a = this._buffer;
-    const w = this.w;
     for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
-      a[this._offset + i] = callback(a[this._offset + i], i, w);
-    }
-    return this;
-  }
-
-  /**
-   * Apply a function element-wise to each coordinate, except w.
-   * @param {function} callback
-   * - @param {number} value
-   * - @param {number} index
-   * - @param {number} w value
-   * @returns {this}
-   */
-  applyCoordinateWise(callback) {
-    const a = this._buffer;
-    const w = this.w;
-    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
-      a[this._offset + i] = callback(a[this._offset + i], i, w);
+      a[this._offset + i] = callback(a[this._offset + i], i);
     }
     return this;
   }
@@ -220,10 +260,6 @@ export class HPointAbstract {
     const b = other._buffer;
     for ( let i = 0, n = this.DIMS; i < n; i += 1 ) a[this._offset + i] += b[other._offset + i];
     return this;
-  }
-
-  _addWithIndex(otherIndex) {
-
   }
 
   /**
@@ -354,6 +390,31 @@ export class HPointAbstract {
   }
 
   /**
+   * Round each coordinate.
+   * @returns {this}
+   */
+  round() {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Math.round(a[this._offset + i]);
+    }
+    return this;
+  }
+
+  /**
+   * Round to specific number of decimal places.
+   * @param {number} places
+   * @returns {this}
+   */
+  roundDecimals(places) {
+    const a = this._buffer;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = Number(a[this._offset + i].toFixed(places));
+    }
+    return this;
+  }
+
+  /**
    * Normalize by dividing this vector by the magnitude.
    * Only well-defined for vectors.
    * @returns {this}
@@ -447,6 +508,95 @@ export class HPointAbstract {
    */
   dotSelf() { return this.magnitudeSquared(); }
 
+}
+
+
+
+/**
+ * Abstract class that represents homogenous points of various dimensions.
+ * All have a DIMS property that controls the number of axes and offset of w component.
+ */
+
+export class HPointAbstract extends ArrayBackedAbstract {
+
+  // ----- NOTE: Basic fills ----- //
+
+  /**
+   * Zero values, setting w to 1.
+   * @returns {HPointAbstract}
+   */
+  zeroPoint() {
+    this.zero();
+    this._w = 1;
+    return this;
+  }
+
+  /**
+   * Zero values, making a vector.
+   * @returns {HPointAbstract}
+   */
+  zeroVector() { return this.zero(); }
+
+  // ----- NOTE: W property ----- //
+
+  // Child classes may defined additional property getters, like x, y, z.
+  // Convention places w at the last value.
+  // Convention is for get x to return arr[0]/w. While get _x will return arr[0].
+
+  get w() { return this._buffer[this._offset + this.DIMS - 1]; }
+
+  set w(value) { this._buffer[this._offset + this.DIMS - 1] = value; }
+
+  // For parallel with _x, _y, ...
+  get _w() { return this._buffer[this._offset + this.DIMS - 1]; }
+
+  set _w(value) { this._buffer[this._offset + this.DIMS - 1] = value; }
+
+  get isVector() { return this.w === 0; }
+
+  get isNormalizedEuclidean() {
+    return this.w === 1 || this.w === 0;
+  }
+
+  get isNormalizedSpherical() { return this.magnitudeSquared() === 1; }
+
+
+  // ----- NOTE: Element-wise math ----- //
+
+  /**
+   * Apply a function element-wise to each coordinate, including w.
+   * @param {function} callback
+   * - @param {number} value
+   * - @param {number} index
+   * - @param {number} w value
+   * @returns {this}
+   */
+  applyElementWise(callback) {
+    const a = this._buffer;
+    const w = this.w;
+    for ( let i = 0, n = this.DIMS; i < n; i += 1 ) {
+      a[this._offset + i] = callback(a[this._offset + i], i, w);
+    }
+    return this;
+  }
+
+  /**
+   * Apply a function element-wise to each coordinate, except w.
+   * @param {function} callback
+   * - @param {number} value
+   * - @param {number} index
+   * - @param {number} w value
+   * @returns {this}
+   */
+  applyCoordinateWise(callback) {
+    const a = this._buffer;
+    const w = this.w;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      a[this._offset + i] = callback(a[this._offset + i], i, w);
+    }
+    return this;
+  }
+
   // ----- NOTE: Matrix transform ----- //
 
   /**
@@ -455,7 +605,7 @@ export class HPointAbstract {
    * @returns {this}
    */
   transform(M) {
-    // TODO: Fix so it modifies this point.
+    M.multiplyPoint
     using mPoint = M.constructor.fromHPoint(this);
     return mPoint.multiply(M);
   }
@@ -698,6 +848,53 @@ export class HPointAbstract {
     return out;
   }
 
+  /**
+   * Is this point exactly equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @returns {boolean}
+   */
+  cEquals(other) {
+    if ( this.DIMS !== other.DIMS ) return false;
+
+    const w0 = this._w;
+    const w1 = other._w;
+    if ( w0 === w1 ) return this.equals(other);
+    if ( !(w0 && w1) ) return false; // A vector will never equal a point.
+
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      if ( a[this._offset + i] * w1 !== b[this._offset + i] * w0 ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Is this point almost equal to another?
+   * Points with different w values are different even if they could be the same.
+   * Use perspectiveDivide to ensure equality for differing w values.
+   * @param {HPointAbstract} other
+   * @param {number} [epsilon]
+   * @returns {boolean}
+   */
+  cAlmostEquals(other, epsilon) {
+    if ( this.DIMS !== other.DIMS ) return false;
+
+    const w0 = this._w;
+    const w1 = other._w;
+    if ( w0 === w1 ) return this.equals(other);
+    if ( !(w0 && w1) ) return false; // A vector will never equal a point.
+
+    const a = this._buffer;
+    const b = other._buffer;
+    for ( let i = 0, n = this.DIMS - 1; i < n; i += 1 ) {
+      if ( !(a[this._offset + i] * w1).almostEquals(b[this._offset + i] * w0, epsilon) ) return false;
+    }
+    return true;
+  }
+
   // ----- NOTE: Static cross ---- //
 
   /**
@@ -803,12 +1000,25 @@ export class HPointAbstract {
    * @param {HPointAbstract} c              Vector
    * @returns {HPointAbstract} The out point
    */
-  static vectorTriple(a, b, c) {
-    const ac = a.dot(c);
-    const ab = a.dot(b);
-    const scaledB = b.clone().multiplyScalar(ac);
-    using scaledC = c.clone().multiplyScalar(ab);
-    return scaledB.subtract(scaledC);
+  static vectorTriple(a, b, c, out) {
+    const A = a._buffer, ao = a._offset;
+    const B = b._buffer, bo = b._offset;
+    const C = c._buffer, co = c._offset;
+
+    const ax = A[ao], ay = A[ao + 1], az = A[ao + 2];
+    const bx = B[bo], by = B[bo + 1], bz = B[bo + 2];
+    const cx = C[co], cy = C[co + 1], cz = C[co + 2];
+
+    const ac = ax * cx + ay * cy + az * cz;
+    const ab = ax * bx + ay * by + az * bz;
+
+    out ||= this.createScratch(b.DIMS);
+    const O = out._buffer, oo = out._offset;
+    O[oo]     = bx * ac - cx * ab;
+    O[oo + 1] = by * ac - cy * ab;
+    O[oo + 2] = bz * ac - cz * ab;
+    if ( out.DIMS > 3 ) O[oo + 3] = 0;
+    return out;
   }
 
   /**
@@ -824,8 +1034,17 @@ export class HPointAbstract {
    * @returns {number}
    */
   static scalarTriple(a, b, c) {
-    using xBC = b.cross(c);
-    return a.dot(xBC);
+    const A = a._buffer, ao = a._offset;
+    const B = b._buffer, bo = b._offset;
+    const C = c._buffer, co = c._offset;
+
+    const ax = A[ao], ay = A[ao + 1], az = A[ao + 2];
+    const bx = B[bo], by = B[bo + 1], bz = B[bo + 2];
+    const cx = C[co], cy = C[co + 1], cz = C[co + 2];
+
+    return ax * (by * cz - bz * cy)
+         - ay * (bx * cz - bz * cx)
+         + az * (bx * cy - by * cx);
   }
 
 }
@@ -838,6 +1057,70 @@ export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBloc
   static #cachedPool;
 
   static get pool() { return HPoint.#cachedPool ??= super.pool; }
+
+  /**
+   * Get an object from the pool for this class.
+   * This object must be manually released.
+   * This object shares a buffer block with many other pooled objects.
+   * @param {number} nDims
+   * @returns {object}
+   */
+  static create(nDims) {
+    const out = this.pool.acquirePersistent(nDims);
+    out._init(nDims, out._buffer);
+    return out;
+  }
+
+  /**
+   * Get an object from the pool for this class.
+   * This object need not be released; call flushScratch instead to release all.
+   * @param {number} nDims
+   * @returns {object}
+   */
+  static createScratch(nDims) {
+    const out = this.pool.acquireScratch(nDims);
+    out._init(nDims, out._buffer);
+    return out;
+  }
+
+  /**
+   * Get an object from the pool for this class.
+   * This object need not be released; call flushScratch instead to release all.
+   * @param {number} nObjects
+   * @param {number} nDims
+   * @returns {*[]} */
+  static createN(nObjects, nDims) {
+    const out = this.pool.acquirePersistentN(nObjects, nDims);
+    for ( let i = 0; i < nObjects; i += 1 ) out[i]._init(nDims, out[i]._buffer);
+    return out;
+  }
+
+  /**
+   * Get an object from the pool for this class.
+   * This object need not be released; call flushScratch instead to release all.
+   * @param {number} nObjects
+   * @param {number} nDims
+   * @returns {*[]}
+   */
+  static createScratchN(nObjects, nDims) {
+    const out = this.pool.acquireScratchN(nObjects, nDims);
+    for ( let i = 0; i < nObjects; i += 1 ) out[i]._init(nDims, out[i]._buffer);
+    return out;
+  }
+
+  /**
+   * Method for creating multiple objects.
+   * These objects should be manually released but use a separate memory block shared
+   * only by them. Getting the _buffer property will show the entire block.
+   * @param {number} nObjects
+   * @param {number} nDims
+   * @returns {object[]}
+   */
+  static createBlock(nObjects, nDims) {
+    const out = this.pool.acquireBlock(nObjects, nDims);
+    for ( let i = 0; i < nObjects; i += 1 ) out[i]._init(nDims, out[i]._buffer);
+    return out;
+  }
 
   /**
    * Create a new point that contains the same values as this one.
@@ -860,13 +1143,27 @@ export class HPoint extends mix(HPointAbstract).with(PoolableMixin, VariableBloc
   }
 
   /**
-    * Clone a point from persistent memory.
-    * @param {number} nDims
-    * @returns {HPointAbstract}
-    */
+   * Clone a point from persistent memory.
+   * @param {number} nDims
+   * @returns {HPointAbstract}
+   */
   clonePersistent(nDims) {
     return this.clone(this.constructor.create(nDims));
   }
+}
+
+// ----- NOTE: Helper functions ----- //
+
+/**
+ * If the distance to the nearest integer is smaller than epsilon, snap it to that integer.
+ * Otherwise, does not modify the number.
+ * @param {number} num
+ * @param {number} [epsilon=1e-08]
+ * @returns {number}
+ */
+function snapToInteger(num, epsilon = 1e-08) {
+  const nearestInt = Math.round(num);
+  return Math.abs(num - nearestInt) < epsilon ? nearestInt : num
 }
 
 // ----- NOTE: DevTools formatter ----- //

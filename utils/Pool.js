@@ -106,17 +106,23 @@ export class BufferManager {
   allocScratch(n = 1) {
     const offset = this.scratchCursor;
     const next = offset + (this.stride * n);
-    if ( next > this.scratchSlab.length ) {
-      console.debug("Scratch buffer overflow! Resizing!");
-      // Double the size or fit the requested space.
-      const newLen = Math.max(this.scratchSlab.length * 2, next);
-      const newSlab = new this.arrayClass(newLen);
-      newSlab.set(this.scratchSlab);
-      this.scratchSlab = newSlab;
-      if ( this.onScratchResize ) this.onScratchResize(newSlab);
-    }
+    if ( next > this.scratchSlab.length ) this._growScratch(next);
     this.scratchCursor = next;
     return offset;
+  }
+
+  /**
+   * Expand the scratch slab.
+   * @param {number} next
+   */
+  _growScratch(next) {
+    console.debug("Scratch buffer overflow! Resizing!");
+    // Double the size or fit the requested space.
+    const newLen = Math.max(this.scratchSlab.length * 2, next);
+    const newSlab = new this.arrayClass(newLen);
+    newSlab.set(this.scratchSlab);
+    this.scratchSlab = newSlab;
+    if ( this.onScratchResize ) this.onScratchResize(newSlab);
   }
 
   /**
@@ -256,26 +262,30 @@ export class VariableBlockBufferManager extends BufferManager {
   _bumpPersistent(n) {
     const offset = this.persistentCursor;
     const next = offset + (this.stride * n);
-
-    // TODO: Need a way to handle growing this. Growing in place would invalidate every shell's _buffer.
-    if ( next > this.persistentSlab.length ) {
-      console.debug("Persistent buffer overflow! Increasing size!");
-      const newLen = Math.max(this.persistentSlab.length * 2, next);
-      const newSlab = new this.arrayClass(newLen);
-      newSlab.set(this.persistentSlab);
-      this.persistentSlab = newSlab;
-
-      // Resize the block sizes lookup array to match the new slab capacity
-      if ( this.persistentBlockSizes ) {
-        const newBlockSizes = new Uint32Array(newLen / this.stride);
-        newBlockSizes.set(this.persistentBlockSizes);
-        this.persistentBlockSizes = newBlockSizes;
-      }
-
-      if ( this.onPersistentResize ) this.onPersistentResize(newSlab);
-    }
+    if ( next > this.persistentSlab.length ) this._growPersistent(next);
     this.persistentCursor = next;
     return offset;
+  }
+
+  /**
+   * Expand the persistent slab.
+   * @param {number} next
+   */
+  _growPersistent(next) {
+    console.debug("Persistent buffer overflow! Increasing size!");
+    const newLen = Math.max(this.persistentSlab.length * 2, next);
+    const newSlab = new this.arrayClass(newLen);
+    newSlab.set(this.persistentSlab);
+    this.persistentSlab = newSlab;
+
+    // Resize the block sizes lookup array to match the new slab capacity
+    if ( this.persistentBlockSizes ) {
+      const newBlockSizes = new Uint32Array(newLen / this.stride);
+      newBlockSizes.set(this.persistentBlockSizes);
+      this.persistentBlockSizes = newBlockSizes;
+    }
+
+    if ( this.onPersistentResize ) this.onPersistentResize(newSlab);
   }
 
   /**
@@ -405,8 +415,8 @@ export class Pool {
   /** @type {number} How many scratch shells handed out since last flush */
   scratchShellCount = 0;
 
-  /** @type {Set<*>} Track active persistent shells for buffer update notifications */
-  activePersistentShells = new Set();
+  /** @type {<*>[]} Track persistent shells for buffer update notifications */
+  persistentShells = [];
 
   constructor(cl, bufferManager) {
     this.cl = cl;
@@ -420,9 +430,7 @@ export class Pool {
     };
 
     this.bufferManager.onPersistentResize = (newSlab) => {
-      for ( const shell of this.activePersistentShells ) {
-        shell._buffer = newSlab;
-      }
+      for ( const shell of this.persistentShells ) shell._buffer = newSlab;
     };
   }
 
@@ -434,9 +442,11 @@ export class Pool {
    */
   _getShell() {
     let shell = this.dormantShells.pop();
-    if ( shell === undefined ) shell = new this.cl();
+    if ( shell === undefined ) {
+      shell = new this.cl();
+      this.persistentShells.push(shell);
+    }
     shell._isDormant = false; // Mark as active.
-    this.activePersistentShells.add(shell); // Track for buffer updates.
     return shell;
   }
 
@@ -462,7 +472,15 @@ export class Pool {
    * Acquire an ephemeral object.
    * @returns {*} An instantiated member of the pool's class.
    */
-  acquireScratch() { return this.acquireScratchN(1)[0]; }
+  acquireScratch() {
+    const bm = this.bufferManager;
+    const offset = bm.allocScratch(1);
+    const shell = this._getScratchShell();
+    shell._buffer = bm.scratchSlab;
+    shell._offset = offset;
+    shell._isScratch = true;
+    return shell;
+  }
 
   /**
    * Acquire a number of ephemeral objects.
@@ -476,7 +494,9 @@ export class Pool {
     const firstOffset = bm.allocScratch(n);
     for ( let i = 0; i < n; i += 1 ) {
       const shell = this._getScratchShell();
-      shell._init(bm.scratchSlab, firstOffset + (stride * i), true);
+      shell._buffer = bm.scratchSlab;
+      shell._offset = firstOffset + (stride * i);
+      shell._isScratch = true;
       outArray[i] = shell;
     }
     return outArray;
@@ -520,7 +540,9 @@ export class Pool {
    */
   #acquirePersistentAt(offset) {
     const shell = this._getShell();
-    shell._init(this.bufferManager.persistentSlab, offset, false);
+    shell._buffer = this.bufferManager.persistentSlab;
+    shell._offset = offset;
+    shell._isScratch = false;
     return shell;
   }
 
@@ -540,8 +562,11 @@ export class Pool {
     const out = new Array(n);
     for ( let i = 0; i < n; i += 1 ) {
       const offset = i * stride;
-      const shell = this._getShell();
-      shell._init(buffer, offset, true); // Treat as scratch so releasing just keeps the shell.
+      const shell = new this.cl();
+      shell._isDormant = false;
+      shell._buffer = buffer;
+      shell._offset = offset;
+      shell._isScratch = true; // Treat as scratch so releasing just keeps the shell.
       out[i] = shell;
     }
     return out;
@@ -565,7 +590,6 @@ export class Pool {
       return;
     }
 
-    this.activePersistentShells.delete(shell);
     this.bufferManager.freePersistent(shell._offset);
     shell._offset = -1; // Safety severing.
     shell._isDormant = true;
@@ -617,8 +641,7 @@ export class Pool {
 
 /**
  * Pool for objects whose length (nDims) is chosen at creation.
- * Each object takes ceil(nDims / stride) strides. Shell DIMS is set on every acquire because
- * shells are recycled across different lengths.
+ * Each object takes ceil(nDims / stride) strides.
  */
 export class VariableBlockPool extends Pool {
 
@@ -627,7 +650,16 @@ export class VariableBlockPool extends Pool {
    * @param {number} [nDims=4]  Length of that object
    * @returns {*} An instantiated member of the pool's class.
    */
-  acquireScratch(nDims = 4) { return this.acquireScratchN(1, nDims)[0]; }
+  acquireScratch(nDims = 4) {
+    const bm = this.bufferManager;
+    const step = Math.ceil(nDims / bm.stride) * bm.stride; // Elements per object.
+    const firstOffset = bm.allocScratch(step / bm.stride);
+    const shell = this._getScratchShell();
+    shell._buffer = bm.scratchSlab;
+    shell._offset = firstOffset + step;
+    shell._isScratch = true;
+    return shell;
+  }
 
   /**
    * Acquire a number of ephemeral objects.
@@ -642,8 +674,9 @@ export class VariableBlockPool extends Pool {
     const firstOffset = bm.allocScratch(nObjects * (step / bm.stride));
     for ( let i = 0; i < nObjects; i += 1 ) {
       const shell = this._getScratchShell();
-      shell._init(bm.scratchSlab, firstOffset + (step * i), true);
-      shell.DIMS = nDims;
+      shell._buffer = bm.scratchSlab;
+      shell._offset = firstOffset + (step * i);
+      shell._isScratch = true;
       outArray[i] = shell;
     }
     return outArray;
@@ -659,8 +692,9 @@ export class VariableBlockPool extends Pool {
     const n = Math.ceil(nDims / bm.stride); // Need sufficient block size to cover the nDims.
     const offset = this.bufferManager.allocPersistent(n);
     const shell = this._getShell();
-    shell._init(bm.persistentSlab, offset, false);
-    shell.DIMS = nDims;
+    shell._buffer = bm.persistentSlab;
+    shell._offset = offset;
+    shell._isScratch = false;
     return shell;
   }
 
@@ -680,8 +714,9 @@ export class VariableBlockPool extends Pool {
     for ( let i = 0; i < nObjects; i += 1 ) {
       const shell = this._getShell();
       const offset = firstOffset < 0 ? bm.allocPersistent(units) : firstOffset + (step * i);
-      shell._init(bm.persistentSlab, offset, false);
-      shell.DIMS = nDims;
+      shell._buffer = bm.persistentSlab;
+      shell._offset = offset;
+      shell._isScratch = false;
       outArray[i] = shell;
     }
     return outArray;
@@ -702,8 +737,9 @@ export class VariableBlockPool extends Pool {
     const out = new Array(nObjects);
     for ( let i = 0; i < nObjects; i += 1 ) {
       const shell = this._getShell();
-      shell._init(buffer, i * stride, true); // Treat as scratch so releasing just keeps the shell.
-      shell.DIMS = stride;
+      shell._buffer = buffer;
+      shell._offset = i * stride;
+      shell._isScratch = true; // Treat as scratch so releasing just keeps the shell.
       shell._isDormant = false;
       out[i] = shell;
     }
@@ -742,13 +778,6 @@ export const PoolableMixin = superclass => class extends superclass {
 
   /** @type {boolean} */
   _isDormant = true; // Track pool state.
-
-  /** Initialize a new object. */
-  _init(buffer, offset, isScratch) {
-    this._buffer = buffer;
-    this._offset = offset;
-    this._isScratch = isScratch;
-  }
 
   // Buffer characteristics for this poolable, used when creating the pool.
 
