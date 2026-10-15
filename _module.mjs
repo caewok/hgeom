@@ -6,6 +6,14 @@ export { BufferManager, Pool, PoolableMixin } from "./utils/Pool.js";
 export { HPointAbstract, HPoint } from "./HPointAbstract.js";
 export { HPoint2dAbstract, HPoint2d } from "./2d/HPoint2d.js";
 export { HPoint3dAbstract, HPoint3d } from "./3d/HPoint3d.js";
+export {
+  MatrixAbstract,
+  MatrixAbstract3x3,
+  MatrixAbstract4x4,
+  Matrix,
+  Matrix3x3,
+  Matrix4x4,
+  } from "./Matrix.js";
 
 export * as bench from "./utils/_module.mjs";
 
